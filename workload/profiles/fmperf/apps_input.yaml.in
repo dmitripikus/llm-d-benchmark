@@ -1,0 +1,14 @@
+model_name: "REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL"
+image: "REPLACE_ENV_LLMDBENCH_HARNESS_CONTAINER_IMAGE"
+service_account: "REPLACE_ENV_LLMDBENCH_HARNESS_SERVICE_ACCOUNT"
+pvc_name: "REPLACE_ENV_LLMDBENCH_HARNESS_PVC_NAME"
+scenarios: "apps"
+qps_values: "0.5"
+num_users: 20
+num_rounds: 10
+num_apps: 20
+users_per_app: 5
+system_prompt_len: 7000
+rag_doc_len: 100
+rag_doc_count: 5
+duration: 30
