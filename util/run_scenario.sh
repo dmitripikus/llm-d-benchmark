@@ -92,8 +92,9 @@ read -t 30 -p "Press enter to continue or Ctrl-C to cancel"
 kubectl create configmap epp-config --from-file=epp-config.yaml=./experiments/${epp}.yaml --dry-run=client -o yaml | 
 	yq '.metadata.annotations.id="'$id'"' |
 	kubectl apply -f -
-kubectl delete pod -l app=endpoint-picker
-if ! kubectl wait --for=condition=Ready pod -l app=endpoint-picker --timeout=60s; then
+
+kubectl delete pod -l inferencepool=gaie-inference-scheduling-epp
+if ! kubectl wait --for=condition=Ready pod -l inferencepool=gaie-inference-scheduling-epp --timeout=60s; then
   echo "❌ Timeout reached: endpoint-picker did not become Ready."
   exit 1
 fi
@@ -106,19 +107,20 @@ util/get_logs.sh $LLMDBENCH_CONTROL_WORK_DIR 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/l
 
 cat <<EOF
 =======> Calling run.sh with
-   -p e2e-solution2 \
-   -t inference-gateway \
-   -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+   -p llm-d-inference-scheduling \
+   -t infra-inference-scheduling-inference-gateway \
+   -k workload-pvc \
    -m 'meta-llama/Llama-3.1-70B-Instruct' \
    -l inference-perf \
    -s 1000000 \
    -w $workload
 EOF
 
+
 ./run.sh \
-    -p e2e-solution2 \
-    -t inference-gateway \
-    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+    -p llm-d-inference-scheduling \
+    -t infra-inference-scheduling-inference-gateway \
+    -k workload-pvc \
     -m 'meta-llama/Llama-3.1-70B-Instruct' \
     -l inference-perf \
     -s 1000000 \

@@ -28,9 +28,9 @@ since_vllm=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 since_epp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 sleep $delay
 
-oc get pod -l app=endpoint-picker -o yaml > epp_pod.yaml
+oc get pod -l inferencepool=gaie-inference-scheduling-epp -o yaml > epp_pod.yaml
 oc get cm epp-config -o yaml | yq '.data["epp-config.yaml"]' > epp_config.yaml
-oc get deployment -l 'app.kubernetes.io/component=vllm' -o yaml > vllm_deployment.yaml
+oc get deployment ms-inference-scheduling-llm-d-modelservice-decode -o yaml > vllm_deployment.yaml
 
 harness=$(oc get pod llmdbench-inference-perf-launcher -o=jsonpath='{range .spec.containers[0].env[?(@.name == "LLMDBENCH_HARNESS_NAME")]}{.value}{end}')
 profile=$(oc get pod llmdbench-inference-perf-launcher -o=jsonpath='{range .spec.containers[0].env[?(@.name == "LLMDBENCH_RUN_EXPERIMENT_HARNESS_WORKLOAD_NAME")]}{.value}{end}')
