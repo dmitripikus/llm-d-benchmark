@@ -31,9 +31,13 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
         -c|--config)
-	config_file="${2:-/dev/null}"
-	shift 2
-	;;
+        config_file="${2:-/dev/null}"
+        shift 2
+	      ;;
+        -l|--loader)
+        loader="${2}"
+        shift 2
+	      ;;
         *)
         echo "Unknown option: $1"
 	usage
@@ -110,7 +114,7 @@ cat <<EOF
    -t inference-gateway \
    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
    -m 'meta-llama/Llama-3.1-70B-Instruct' \
-   -l inference-perf \
+   -l $loader \
    -s 1000000 \
    -w $workload
 EOF
@@ -120,7 +124,7 @@ EOF
     -t inference-gateway \
     -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
     -m 'meta-llama/Llama-3.1-70B-Instruct' \
-    -l inference-perf \
+    -l $loader \
     -s 1000000 \
     -w $workload
 
