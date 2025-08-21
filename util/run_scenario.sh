@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 
-#trap 'echo -ne "\033[32m${BASH_SOURCE}:${LINENO}  \033[0m${BASH_COMMAND}"; read' DEBUG
+# trap 'echo -ne "\033[32m${BASH_SOURCE}:${LINENO}  \033[0m${BASH_COMMAND}"; read' DEBUG
+# set -x
 
 # assuming installed under util/
 pushd "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null; cd ..
 
-workloads=$(find workload/profiles/inference-perf/ -name 'workload_*.yaml.in' | sed 's|.*/||' | sed 's|\.yaml.in||' | sed 's|workload_||')
-epps=$(find experiments/ -name 'epp_*.yaml' | sed 's|.*/||' | sed 's|\.yaml||' | sed 's|epp_||')
-NL=$'\n'
-
 function usage {
   cat <<EOF
   USAGE:
-    $0 -w WORKLOAD -e EPP [-c CONFIG_FILE]
+    $0 -w WORKLOAD -e EPP [-c CONFIG_FILE] -l LOADER
 
   - WORKLOAD in: ${workloads//$NL/ })  (workload/profiles/inference-perf/workload_*.yaml.in)
   - EPP in: ${epps//$NL/ } (experiments/epp_*.yaml)
@@ -46,12 +43,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+workloads=$(find workload/profiles/$loader/ -name 'workload_*.yaml.in' | sed 's|.*/||' | sed 's|\.yaml.in||' | sed 's|workload_||')
+epps=$(find experiments/ -name 'epp_*.yaml' | sed 's|.*/||' | sed 's|\.yaml||' | sed 's|epp_||')
+NL=$'\n'
+
 if [[ -z $workload ]]; then
   echo "Workload not specified."
   usage
   exit 1
 fi
-[ -f ./workload/profiles/inference-perf/${workload}.yaml.in ] || {
+[ -f ./workload/profiles/$loader/${workload}.yaml.in ] || {
   echo "Workload file ./workload/profiles/inference-perf/${workload}.yaml.in does not exist."
   usage
   exit 1
@@ -85,8 +86,8 @@ id=$(date +%s)
 export LLMDBENCH_CONTROL_WORK_DIR=${LLMDBENCH_CONTROL_WORK_DIR}/${workload}-${epp}-${id}
 mkdir -p -v $LLMDBENCH_CONTROL_WORK_DIR
 
-echo applying workload from ./workload/profiles/inference-perf/${workload}.yaml.in
-yq -C . <./workload/profiles/inference-perf/${workload}.yaml.in
+echo applying workload from ./workload/profiles/$loader/${workload}.yaml.in
+yq -C . <./workload/profiles/$loader/${workload}.yaml.in
 read -t 30 -p "Press enter to continue or Ctrl-C to cancel"
 
 echo applying epp config from ./experiments/${epp}.yaml
@@ -106,7 +107,7 @@ echo endpoint-picker is restarted!
 echo Starting logging into $LLMDBENCH_CONTROL_WORK_DIR
 trap 'kill -9 $(jobs -p)' EXIT TERM INT
 chmod +x util/get_logs.sh
-util/get_logs.sh $LLMDBENCH_CONTROL_WORK_DIR 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/log.log &
+util/get_logs.sh -d $LLMDBENCH_CONTROL_WORK_DIR -l $loader 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/log.log &
 
 cat <<EOF
 =======> Calling run.sh with
