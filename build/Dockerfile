@@ -13,20 +13,20 @@ RUN apt-get update; \
     && apt-get clean && rm -rf /var/cache/apt
 
 RUN echo "# /etc/rsyncd: configuration file for rsync daemon mode" > /etc/rsyncd.conf; echo -e "\
-\n\
-[global]\n\
-charset = utf-8\n\
-port = 20873\n\
-max connections = 8\n\
-reverse lookup = no\n\
-\n\
-[requests]\n\
-path = /requests\n\
-read only = yes\n\
-use chroot = false\n\
-list = yes\n\
-" >> /etc/rsyncd.conf; \
-sed -i 's^\-e^^' /etc/rsyncd.conf
+    \n\
+    [global]\n\
+    charset = utf-8\n\
+    port = 20873\n\
+    max connections = 8\n\
+    reverse lookup = no\n\
+    \n\
+    [requests]\n\
+    path = /requests\n\
+    read only = yes\n\
+    use chroot = false\n\
+    list = yes\n\
+    " >> /etc/rsyncd.conf; \
+    sed -i 's^\-e^^' /etc/rsyncd.conf
 
 WORKDIR /workspace
 
@@ -37,7 +37,7 @@ RUN pip install kubernetes_asyncio
 
 ARG FM_PERF_REPO=https://github.com/fmperf-project/fmperf.git
 ARG FM_PERF_BRANCH=main
-ARG FM_PERF_COMMIT=0b1f63acdafcc815847a22332c0e478cc41ebed2
+ARG FM_PERF_COMMIT=8d85bc3d145c42577c980358b198eb10e3c7f6be
 RUN git clone --branch ${FM_PERF_BRANCH} ${FM_PERF_REPO}
 RUN cd fmperf; \
     git checkout ${FM_PERF_COMMIT}; \
@@ -46,7 +46,7 @@ RUN cd fmperf; \
 
 ARG INFERENCE_PERF_REPO=https://github.com/kubernetes-sigs/inference-perf.git
 ARG INFERENCE_PERF_BRANCH=main
-ARG INFERENCE_PERF_COMMIT=087e18a559f776ed10798bdabcdc8b3d52231d3c
+ARG INFERENCE_PERF_COMMIT=5e1649dd9a7355fd34f578c5e6ba10ff3b08253f
 RUN git clone --branch ${INFERENCE_PERF_BRANCH} ${INFERENCE_PERF_REPO}
 RUN cd inference-perf; \
     git checkout ${INFERENCE_PERF_COMMIT}; \
