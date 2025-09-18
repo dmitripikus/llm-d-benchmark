@@ -1,0 +1,29 @@
+
+FMPERF
+==============
+./run.sh \
+    -p llm-d-precise \
+    -t infra-kv-events-inference-gateway \
+    -k workload-pvc \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w sanity_short-input \
+    -l fmperf \
+    -c $(realpath ./gilenv.sh) \
+    -s 1000000    
+
+
+INFERENCE-PERF
+==============
+
+./run.sh \
+    -p llm-d-precise \
+    -t infra-kv-events-inference-gateway \
+    -k workload-pvc \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w sanity_random.yaml \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh) \
+    -s 1000000
+
+
+
