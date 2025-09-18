@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-#trap 'echo -ne "\033[32m${BASH_SOURCE}:${LINENO}  \033[0m${BASH_COMMAND}"; read' DEBUG
-
 # assuming installed under util/
 pushd "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null; cd ..
 
@@ -93,8 +91,8 @@ kubectl create configmap epp-config --from-file=epp-config.yaml=./experiments/${
 	yq '.metadata.annotations.id="'$id'"' |
 	kubectl apply -f -
 
-kubectl delete pod -l inferencepool=gaie-inference-scheduling-epp
-if ! kubectl wait --for=condition=Ready pod -l inferencepool=gaie-inference-scheduling-epp --timeout=60s; then
+kubectl delete pod -l inferencepool=gaie-kv-events-epp
+if ! kubectl wait --for=condition=Ready pod -l inferencepool=gaie-kv-events-epp --timeout=60s; then
   echo "❌ Timeout reached: endpoint-picker did not become Ready."
   exit 1
 fi
@@ -107,8 +105,8 @@ util/get_logs.sh $LLMDBENCH_CONTROL_WORK_DIR 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/l
 
 cat <<EOF
 =======> Calling run.sh with
-   -p llm-d-inference-scheduling \
-   -t infra-inference-scheduling-inference-gateway \
+   -p llm-d-precise \
+   -t infra-kv-events-inference-gateway \
    -k workload-pvc \
    -m 'meta-llama/Llama-3.1-70B-Instruct' \
    -l inference-perf \
@@ -118,13 +116,14 @@ EOF
 
 
 ./run.sh \
-    -p llm-d-inference-scheduling \
-    -t infra-inference-scheduling-inference-gateway \
+    -p llm-d-precise \
+    -t infra-kv-events-inference-gateway \
     -k workload-pvc \
     -m 'meta-llama/Llama-3.1-70B-Instruct' \
     -l inference-perf \
     -s 1000000 \
     -w $workload
+
 
 read -t 30 -p "Run finished. Press enter to kill log capture"
 kill -9 $(jobs -p)

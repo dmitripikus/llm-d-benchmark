@@ -28,9 +28,9 @@ since_vllm=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 since_epp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 sleep $delay
 
-oc get pod -l inferencepool=gaie-inference-scheduling-epp -o yaml > epp_pod.yaml
+oc get pod -l inferencepool=gaie-kv-events-epp -o yaml > epp_pod.yaml
 oc get cm epp-config -o yaml | yq '.data["epp-config.yaml"]' > epp_config.yaml
-oc get deployment ms-inference-scheduling-llm-d-modelservice-decode -o yaml > vllm_deployment.yaml
+oc get deployment ms-kv-events-llm-d-modelservice-decode -o yaml > vllm_deployment.yaml
 
 harness=$(oc get pod llmdbench-inference-perf-launcher -o=jsonpath='{range .spec.containers[0].env[?(@.name == "LLMDBENCH_HARNESS_NAME")]}{.value}{end}')
 profile=$(oc get pod llmdbench-inference-perf-launcher -o=jsonpath='{range .spec.containers[0].env[?(@.name == "LLMDBENCH_RUN_EXPERIMENT_HARNESS_WORKLOAD_NAME")]}{.value}{end}')
@@ -48,7 +48,7 @@ while true; do
   echo __________________________________________________________ >> ${log_vllm}
   echo capturing run for $harness, $profile, $name at $(date) >> ${log_vllm}
   echo __________________________________________________________ >> ${log_vllm}
-  oc logs -f -l 'app.kubernetes.io/component=vllm' --prefix --since-time $since_vllm | grep -v -f <(cat <<EOF
+  oc logs -f -l 'llm-d.ai/model=ms-kv-events-llm-d-modelservice' --prefix --since-time $since_vllm | grep -v -f <(cat <<EOF
 "GET /health HTTP/1.1" 200 OK
 "GET /metrics HTTP/1.1" 200 OK
 "POST /v1/completions HTTP/1.1" 200 OK
@@ -63,7 +63,7 @@ while true; do
   echo __________________________________________________________ >> ${log_epp}
   echo capturing run for $harness, $profile, $name at $(date) >> ${log_epp}
   echo __________________________________________________________ >> ${log_epp}
-  oc logs -f -l app=endpoint-picker --since-time $since_epp  >> ${log_epp} 2>/dev/stderr
+  oc logs -f -l inferencepool=gaie-kv-events-epp --since-time $since_epp  >> ${log_epp} 2>/dev/stderr
   since_epp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   echo epp log capture failed. restarting.
   sleep 2
