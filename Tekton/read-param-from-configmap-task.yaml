@@ -1,0 +1,53 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: read-param-from-configmap
+spec:
+  workspaces:
+    - name: shared-workspace
+  params:
+    - name: configmap-name
+      type: string
+  steps:
+    - name: git-clone
+      image: bitnami/git:latest
+      securityContext:
+        runAsUser: 0
+      workingDir: $(workspaces.shared-workspace.path)
+      script: |
+        #!/bin/sh
+        set -e
+        echo "Cloning repository"
+        git clone --branch fusionv6-llm-d-inference-scheduling-env --single-branch https://github.com/dmitripikus/llm-d-benchmark.git
+        echo "Repository cloned to $(workspaces.shared-workspace.path)/llm-d-benchmark"
+
+    - name: read-config
+      image: bitnami/kubectl:latest
+      securityContext:
+        runAsUser: 0
+      workingDir: $(workspaces.shared-workspace.path)
+      script: |
+        #!/bin/sh
+        echo "Reading ConfigMap $(params.configmap-name) ..."
+        # Print the content
+        for f in /config/*; do
+          echo $f
+          cat $f
+        done
+
+        env
+        
+        #apk add --no-cache yq
+        #work_dir=$(yq e '.work_dir' /config/config.yaml)
+        #hf_token=$(yq e '.hf_token' /config/config.yaml)
+        #echo ""
+        #cd llm-d-benchmark
+        #git status
+  volumes:
+    - name: config-volume
+      configMap:
+        name: $(params.configmap-name)
+  stepTemplate:
+      volumeMounts:
+        - name: config-volume
+          mountPath: /config

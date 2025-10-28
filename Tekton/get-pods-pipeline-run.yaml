@@ -1,0 +1,12 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: get-pods-pipeline-run
+spec:
+  pipelineRef:
+    name: get-pods-pipeline
+  taskRunTemplate:
+    serviceAccountName: inference-perf-runner    
+  params:
+  - name: username
+    value: "Tekton"

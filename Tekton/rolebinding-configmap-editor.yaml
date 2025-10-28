@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: configmap-editor-binding
+  namespace: dpikus-ns
+subjects:
+  - kind: ServiceAccount
+    name: inference-perf-runner
+    namespace: dpikus-ns
+roleRef:
+  kind: Role
+  name: configmap-editor
+  apiGroup: rbac.authorization.k8s.io

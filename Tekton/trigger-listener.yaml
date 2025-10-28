@@ -1,0 +1,24 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: get-pods-listener
+spec:
+  serviceAccountName: tekton-robot
+  triggers:
+    - name: get-pods-trigger 
+      bindings:
+      - ref: get-pods-binding
+      template:
+        spec:
+          resourcetemplates:
+            - apiVersion: tekton.dev/v1
+              kind: PipelineRun
+              metadata:
+                generateName: get-pods-pipeline-run-
+              spec:
+                serviceAccountName: inference-perf-runner
+                pipelineRef:
+                  name: get-pods-pipeline
+                params:
+                  - name: username
+                    value: $(body.username)

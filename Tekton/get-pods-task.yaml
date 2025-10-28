@@ -1,0 +1,14 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: get-pods
+spec:
+  steps:
+    - name: list-pods
+      image: bitnami/kubectl:latest
+      script: |
+        #!/bin/sh
+        echo "Listing pods in namespace: $(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+        kubectl get pods -n $(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+        echo "Second run:"
+        kubectl get pods

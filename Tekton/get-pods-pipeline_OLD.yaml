@@ -1,0 +1,23 @@
+
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: get-pods-pipeline
+spec:
+  params:
+  - name: config
+    type: string
+  tasks:
+    - name: store-to-config-map
+      taskRef:
+        name: store-param-to-configmap
+      params:
+        - name: configmap-name
+          value: bench-config
+        - name: data
+          value: "$(params.config)"        
+    - name: get-pods
+      runAfter:
+        - store-to-config-map
+      taskRef:
+        name: get-pods

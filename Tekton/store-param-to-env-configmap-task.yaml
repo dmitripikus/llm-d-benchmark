@@ -1,0 +1,25 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: store-param-to-env-configmap
+spec:
+  params:
+    - name: configmap-name
+      type: string
+    - name: data
+      type: string  
+  steps:
+    - name: create-configmap
+      image: bitnami/kubectl:latest
+      script: |
+        #!/bin/sh
+        work_dir=$(yq e '.work_dir' <<<"$(params.data)")
+        hf_token=$(yq e '.hf_token' <<<"$(params.data)")
+        echo $work_dir
+        echo $hf_token
+        echo "Creating ConfigMap $(params.configmap-name)..."
+        kubectl create configmap $(params.configmap-name) \
+          --from-literal=LLMDBENCH_CONTROL_WORK_DIR="$work_dir" \
+          --from-literal=LLMDBENCH_HF_TOKEN="$hf_token" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl get cm $(params.configmap-name)  

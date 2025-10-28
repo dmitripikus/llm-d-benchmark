@@ -1,0 +1,12 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: get-pods-listener
+spec:
+  serviceAccountName: tekton-robot
+  triggers:
+    - name: get-pods-trigger 
+      bindings:
+      - ref: get-pods-binding
+      template:
+        ref: get-pods-template

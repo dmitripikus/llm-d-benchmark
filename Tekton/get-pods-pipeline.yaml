@@ -1,0 +1,31 @@
+
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: get-pods-pipeline
+spec:
+  workspaces:
+    - name: shared-workspace
+  params:
+  - name: config
+    type: string
+  tasks:
+    - name: store-to-env-configmap
+      taskRef:
+        name: store-param-to-env-configmap
+      params:
+        - name: configmap-name
+          value: bench-config
+        - name: data
+          value: "$(params.config)"        
+    - name: read-from-configmap
+      runAfter:
+        - store-to-env-configmap
+      taskRef:
+        name: read-param-from-configmap
+      workspaces:
+        - name: shared-workspace   # Task workspace name
+          workspace: shared-workspace  # Bind to pipeline workspace          
+      params:
+        - name: configmap-name
+          value: bench-config
