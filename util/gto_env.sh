@@ -1,4 +1,4 @@
-export LLMDBENCH_CONTROL_WORK_DIR=/home/dean/gto_benchmark
+export LLMDBENCH_CONTROL_WORK_DIR=${HOME}/gto_benchmark
 export LLMDBENCH_HF_TOKEN=$(oc get secrets llm-d-hf-token -o jsonpath='{.data.*}' | base64 -d)
 
 export LLMDBENCH_IMAGE_REGISTRY=quay.io

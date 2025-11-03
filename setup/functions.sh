@@ -41,11 +41,12 @@ function model_attribute {
   # model is of the form namespace/modelid:uniqueid
   local modelid=$(echo $model | cut -d: -f2)
   model=$(echo $model | cut -d: -f1)
-  local modelid_label="$(echo -n $modelid | cut -d '/' -f 1 | cut -c1-8)-$(echo -n $modelid | gsha256sum | awk '{print $1}' | cut -c1-8)-$(echo -n $modelid | cut -d '/' -f 2 | rev | cut -c1-8 | rev)"
+  local SHA256CMD=$(type -p gsha256sum || type -p sha256sum)
+  local modelid_label="$(echo -n $modelid | cut -d '/' -f 1 | cut -c1-8)-$(echo -n $modelid | $SHA256CMD | awk '{print $1}' | cut -c1-8)-$(echo -n $modelid | cut -d '/' -f 2 | rev | cut -c1-8 | rev)"
 
   local modelcomponents=$(echo $model | cut -d '/' -f 2 |  tr '[:upper:]' '[:lower:]' | $LLMDBENCH_CONTROL_SCMD -e 's^qwen^qwen-^g' -e 's^-^\n^g')
   local provider=$(echo $model | cut -d '/' -f 1)
-  local type=$(echo "${modelcomponents}" | grep -Ei "nstruct|hf|chat|speech|vision")
+  local type=$(echo "${modelcomponents}" | grep -Ei "nstruct|hf|chat|speech|vision" || echo base)
   local parameters=$(echo "${modelcomponents}" | grep -Ei "[0-9].*b|[0-9].*m" | $LLMDBENCH_CONTROL_SCMD -e 's^a^^' -e 's^\.^p^')
   local majorversion=$(echo "${modelcomponents}" | grep -Ei "^[0-9]" | grep -Evi "b|E" |  $LLMDBENCH_CONTROL_SCMD -e "s/$parameters//g" | cut -d '.' -f 1)
   local kind=$(echo "${modelcomponents}" | head -n 1 | cut -d '/' -f 1)
@@ -855,6 +856,7 @@ EOF
 export -f create_harness_pod
 
 function get_model_name_from_pod {
+    set -xv
     local namespace=$1
     local image=$2
     local url=$3
@@ -883,6 +885,7 @@ function get_model_name_from_pod {
       return 1
     fi
     echo $has_model
+    set +xv
 }
 export -f get_model_name_from_pod
 

@@ -48,7 +48,7 @@ while true; do
   echo __________________________________________________________ >> ${log_vllm}
   echo capturing run for $harness, $profile, $name at $(date) >> ${log_vllm}
   echo __________________________________________________________ >> ${log_vllm}
-  oc logs -f -l 'llm-d.ai/model=ms-kv-events-llm-d-modelservice' --prefix --since-time $since_vllm | grep -v -f <(cat <<EOF
+  oc logs -f -l 'llm-d.ai/model=ms-kv-events-llm-d-modelservice' --prefix --since-time $since_vllm --max-log-requests 8 | grep -v -f <(cat <<EOF
 "GET /health HTTP/1.1" 200 OK
 "GET /metrics HTTP/1.1" 200 OK
 "POST /v1/completions HTTP/1.1" 200 OK

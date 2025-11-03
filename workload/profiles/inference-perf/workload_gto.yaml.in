@@ -1,0 +1,47 @@
+load:
+  type: poisson
+  stages:
+    - rate: 10
+      duration: 30
+    - rate: 20
+      duration: 30
+#    - rate: 43
+#      duration: 30
+#    - rate: 46
+#      duration: 30
+#    - rate: 49
+#      duration: 30
+#    - rate: 52
+#      duration: 30
+#    - rate: 55
+#      duration: 30
+#    - rate: 57
+#      duration: 30
+#    - rate: 60
+#      duration: 30
+api:
+  type: completion
+  streaming: true
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_TOKENIZER
+data:
+  type: shared_prefix
+  shared_prefix:
+    num_groups: 150               # Number of distinct shared prefixes
+    num_prompts_per_group: 1      # Number of unique questions per shared prefix
+    system_prompt_len: 6000       # Length of the shared prefix (in tokens)
+    question_len: 1000            # Length of the unique question part (in tokens)
+    output_len: 1000              # Target length for the model's generated output (in tokens)
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
+storage:
+  local_storage:
+    path: /workspace

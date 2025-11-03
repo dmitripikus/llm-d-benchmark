@@ -105,10 +105,10 @@ util/get_logs.sh $LLMDBENCH_CONTROL_WORK_DIR 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/l
 
 cat <<EOF
 =======> Calling run.sh with
-   -p llm-d-precise \
-   -t infra-kv-events-inference-gateway \
+   -p $NAMESPACE \
+   -t infra-kv-events-inference-gateway-istio \
    -k workload-pvc \
-   -m 'meta-llama/Llama-3.1-70B-Instruct' \
+   -m "$MODEL" \
    -l inference-perf \
    -s 1000000 \
    -w $workload
@@ -116,10 +116,10 @@ EOF
 
 
 ./run.sh \
-    -p llm-d-precise \
-    -t infra-kv-events-inference-gateway \
+    -p $NAMESPACE \
+    -t infra-kv-events-inference-gateway-istio \
     -k workload-pvc \
-    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -m "$MODEL" \
     -l inference-perf \
     -s 1000000 \
     -w $workload

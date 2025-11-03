@@ -29,13 +29,14 @@
 # Scheduler experiment - prefix-only vs prefix+load, with NO shared prefix, long input
 #epps=(sched_cache_tracking_only sched_cache_tracking_load)
 
-
-epps=(cache_tracking)
-workloads=(sanity_random)
+export NAMESPACE=pytorch-conference-precise
+export MODEL='Qwen/Qwen3-32B'
+epps=(load precise)
+workloads=(gto)
 
 
 for epp in "${epps[@]}"; do 
     for workload in "${workloads[@]}"; do 
-        util/run_scenario.sh -w $workload -e $epp -c $(realpath ./inf_perf_env.sh); 
+        util/run_scenario.sh -w $workload -e $epp -c $(realpath util/gto_env.sh); 
     done; 
 done
