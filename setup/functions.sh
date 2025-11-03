@@ -856,7 +856,6 @@ EOF
 export -f create_harness_pod
 
 function get_model_name_from_pod {
-    set -xv
     local namespace=$1
     local image=$2
     local url=$3
@@ -885,7 +884,6 @@ function get_model_name_from_pod {
       return 1
     fi
     echo $has_model
-    set +xv
 }
 export -f get_model_name_from_pod
 
