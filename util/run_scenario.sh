@@ -101,12 +101,12 @@ echo endpoint-picker is restarted!
 echo Starting logging into $LLMDBENCH_CONTROL_WORK_DIR
 trap 'kill -9 $(jobs -p)' EXIT TERM INT
 chmod +x util/get_logs.sh
-util/get_logs.sh $LLMDBENCH_CONTROL_WORK_DIR 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/log.log &
+util/get_logs.sh $LLMDBENCH_CONTROL_WORK_DIR 2>&1 >$LLMDBENCH_CONTROL_WORK_DIR/log.log & echo $! > get_logs.pid
 
 cat <<EOF
 =======> Calling run.sh with
    -p $NAMESPACE \
-   -t infra-kv-events-inference-gateway-istio \
+   -t infra-inference-scheduling-inference-gateway \
    -k workload-pvc \
    -m "$MODEL" \
    -l inference-perf \
@@ -117,7 +117,7 @@ EOF
 
 ./run.sh \
     -p $NAMESPACE \
-    -t infra-kv-events-inference-gateway-istio \
+    -t infra-inference-scheduling-inference-gateway \
     -k workload-pvc \
     -m "$MODEL" \
     -l inference-perf \
@@ -126,5 +126,6 @@ EOF
 
 
 read -t 30 -p "Run finished. Press enter to kill log capture"
+[[ -f get_logs.pid ]] && { pkill -9 -P $(cat get_logs.pid); kill -9 $(cat get_logs.pid); }
 kill -9 $(jobs -p)
 popd

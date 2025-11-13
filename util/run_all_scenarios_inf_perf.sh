@@ -29,7 +29,9 @@
 # Scheduler experiment - prefix-only vs prefix+load, with NO shared prefix, long input
 #epps=(sched_cache_tracking_only sched_cache_tracking_load)
 
-export NAMESPACE=pytorch-conference-precise
+#export NAMESPACE=pytorch-conference-precise
+export NAMESPACE=dpikus-ns
+#export MODEL='Qwen/Qwen3-1.7B'
 export MODEL='Qwen/Qwen3-32B'
 epps=(load precise)
 workloads=(gto)

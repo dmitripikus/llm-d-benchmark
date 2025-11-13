@@ -57,7 +57,7 @@ EOF
   since_vllm=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   echo vllm log capture failed. restarting.
   sleep 2
-done &
+done & echo $! > log_vllm.pid
 
 while true; do
   echo __________________________________________________________ >> ${log_epp}
@@ -68,4 +68,5 @@ while true; do
   echo epp log capture failed. restarting.
   sleep 2
 done
+[[ -f log_vllm.pid ]] && { pkill -9 -P $(cat log_vllm.pid); kill -9 $(cat log_vllm.pid); }
 kill $(jobs -p)
