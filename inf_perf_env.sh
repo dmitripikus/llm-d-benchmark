@@ -5,3 +5,6 @@ export LLMDBENCH_IMAGE_REGISTRY=quay.io
 export LLMDBENCH_IMAGE_REPO="dpikus"
 export LLMDBENCH_IMAGE_NAME="llm-d-benchmark"
 export LLMDBENCH_IMAGE_TAG="v0.2.2_fix"
+
+export LLMDBENCH_VLLM_COMMON_PVC_NAME="model-cache-pvc"
+export LLMDBENCH_VLLM_COMMON_PVC_STORAGE_CLASS="ocs-storagecluster-cephfs"

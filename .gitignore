@@ -57,3 +57,4 @@ env.bak/
 venv.bak/
 
 scenarios/none.sh
+ht_token.sh

@@ -45,7 +45,10 @@ function model_attribute {
 
   local modelcomponents=$(echo $model | cut -d '/' -f 2 |  tr '[:upper:]' '[:lower:]' | $LLMDBENCH_CONTROL_SCMD -e 's^qwen^qwen-^g' -e 's^-^\n^g')
   local provider=$(echo $model | cut -d '/' -f 1)
-  local type=$(echo "${modelcomponents}" | grep -Ei "nstruct|hf|chat|speech|vision")
+  #local type=$(echo "${modelcomponents}" | grep -Ei "nstruct|hf|chat|speech|vision")
+  #dp - fix start
+  local type=$(echo "${modelcomponents}" | grep -Ei "nstruct|hf|chat|speech|vision|opt" || echo base)
+  #dp - fix end
   local parameters=$(echo "${modelcomponents}" | grep -Ei "[0-9].*b|[0-9].*m" | $LLMDBENCH_CONTROL_SCMD -e 's^a^^' -e 's^\.^p^')
   local majorversion=$(echo "${modelcomponents}" | grep -Ei "^[0-9]" | grep -Evi "b|E" |  $LLMDBENCH_CONTROL_SCMD -e "s/$parameters//g" | cut -d '.' -f 1)
   local kind=$(echo "${modelcomponents}" | head -n 1 | cut -d '/' -f 1)

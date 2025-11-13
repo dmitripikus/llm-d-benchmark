@@ -30,3 +30,60 @@ INFERENCE-PERF
 Running with EPP that contains 'score' metrics
 Original EPP image to replace: 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.2.1'
 My image: 'quay.io/dpikus/llm-d-inference-scheduler:score_metrics'
+
+
+INFERENCE-PERF for DEMO:
+==============
+
+./run.sh \
+    -p pytorch-conference-precise \
+    -t infra-kv-events-inference-gateway-istio \
+    -k workload-pvc \
+    -m 'Qwen/Qwen3-32B' \
+    -w sanity_random.yaml \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh) \
+    -s 1000000
+
+./run.sh \
+    -p pytorch-conference-load \
+    -t infra-kv-events-inference-gateway-istio \
+    -k workload-pvc \
+    -m 'Qwen/Qwen3-32B' \
+    -w sanity_random.yaml \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh) \
+    -s 1000000
+
+./run.sh \
+    -p pytorch-conference-random \
+    -t infra-kv-events-inference-gateway-istio \
+    -k workload-pvc \
+    -m 'Qwen/Qwen3-32B' \
+    -w sanity_random.yaml \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh) \
+    -s 1000000
+
+
+./run.sh \
+    -p dpikus-ns \
+    -t infra-inference-scheduling-inference-gateway \
+    -k workload-pvc \
+    -m 'Qwen/Qwen3-0.6B' \
+    -w sanity_random.yaml \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh) \
+    -s 1000000
+
+=========================
+
+./run.sh \
+    -p dpikus-ns \
+    -t infra-inference-scheduling-inference-gateway \
+    -k workload-pvc \
+    -m 'Qwen/Qwen3-0.6B' \
+    -w sanity_random.yaml \
+    -l inference-perf
+
+

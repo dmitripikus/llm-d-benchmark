@@ -1,5 +1,5 @@
-#work_dir: "/Users/dpikus/DP_FILES/Data/projects/llm-d/kv-cache-benchmarking/LLM-D-BENCHMARK/inference-perf"
-#hf_token: <enter_your_hf_key>
+work_dir: "/Users/dpikus/DP_FILES/Data/projects/llm-d/kv-cache-benchmarking/LLM-D-BENCHMARK/inference-perf"
+hf_token: $HF_TOKEN
 # vllm_common_pvc_name: 
 # vllm_common_pvc_storage_class: ocs-storagecluster-cephfs
 llmbench_image:

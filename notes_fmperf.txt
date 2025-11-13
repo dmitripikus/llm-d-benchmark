@@ -1,0 +1,141 @@
+#./run.sh  -d -p e2e-solution2 -t inference-gateway -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim -m 'meta-llama/Llama-3.1-70B-Instruct' -w apps_input -l fmperf -c $(realpath ../gil.sh)
+
+./run.sh  -p e2e-solution2 -t inference-gateway -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim -m 'meta-llama/Llama-3.1-70B-Instruct' -w apps_input -l fmperf -c $(realpath ./gilenv.sh)
+
+brew autoremove
+
+
+./run.sh  -p e2e-solution2 -t inference-gateway -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim -m 'meta-llama/Llama-3.1-70B-Instruct' -w sanity_short-input -l fmperf -c $(realpath ./gilenv.sh)
+
+./run.sh  -p e2e-solution2 -t inference-gateway -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim -m 'meta-llama/Llama-3.1-70B-Instruct' -w medium_model_long_input -l fmperf -c $(realpath ./gilenv.sh)
+
+
+Note:
+Profile medium_model_long_input.yaml.in worked - with time changed to 60 seconds, and QPS changed to 2
+
+fmperf - general
+==============
+./run.sh \
+    -p e2e-solution2 \
+    -t inference-gateway \
+    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w sanity_long-input \
+    -l fmperf \
+    -c $(realpath ./fmperf_env.sh)
+
+
+fmperf - exp1
+==============
+./run.sh \
+    -p e2e-solution2 \
+    -t inference-gateway \
+    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w kvcache_prefix_exp1 \
+    -l fmperf \
+    -c $(realpath ./dev_fmperf_exp1_env.sh)
+
+
+
+
++++++++++++++
++++++++++++++
+
+
+
+
+inference-perf
+==============
+
+./run.sh \
+    -p e2e-solution2 \
+    -t inference-gateway \
+    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w shared_prefix_synthetic_exp1 \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh) \
+    -s 10000
+
+
+
+++++++++++++++
+
+
+
+
+bash -x ./run.sh \
+    -p e2e-solution2 \
+    -t inference-gateway \
+    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w shared_prefix_synthetic \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh)
+
+
+./run.sh \
+    -d \
+    -p e2e-solution2 \
+    -t inference-gateway \
+    -k vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim \
+    -m 'meta-llama/Llama-3.1-70B-Instruct' \
+    -w shared_prefix_synthetic \
+    -l inference-perf \
+    -c $(realpath ./inf_perf_env.sh)
+
+
+
++++ oc apply -f /Users/dpikus/DP_FILES/Data/projects/Inf_Router/repos/dev_bench_inf_perf/setup/yamls/05_a_pod_access_to_harness_data.yaml
+The Pod "access-to-harness-data-vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim" is invalid: spec: Forbidden: pod updates may not change fields other than spec.containers[*].image,spec.initContainers[*].image,spec.activeDeadlineSeconds,spec.tolerations (only additions to existing tolerations),spec.terminationGracePeriodSeconds (allow it to be set to 1 if it was previously negative)
+  core.PodSpec{
+        Volumes: []core.Volume{
+                {Name: "requests", VolumeSource: {PersistentVolumeClaim: &{ClaimName: "vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim"}}},
++               {
++                       Name: "cache-volume",
++                       VolumeSource: core.VolumeSource{
++                               PersistentVolumeClaim: &core.PersistentVolumeClaimVolumeSource{ClaimName: "model-pvc"},
++                       },
++               },
+                {Name: "kube-api-access-bbdfp", VolumeSource: {Projected: &{Sources: {{ServiceAccountToken: &{ExpirationSeconds: 3607, Path: "token"}}, {ConfigMap: &{LocalObjectReference: {Name: "kube-root-ca.crt"}, Items: {{Key: "ca.crt", Path: "ca.crt"}}}}, {DownwardAPI: &{Items: {{Path: "namespace", FieldRef: &{APIVersion: "v1", FieldPath: "metadata.namespace"}}}}}, {ConfigMap: &{LocalObjectReference: {Name: "openshift-service-ca.crt"}, Items: {{Key: "service-ca.crt", Path: "service-ca.crt"}}}}}, DefaultMode: &420}}},
+        },
+        InitContainers: nil,
+        Containers: []core.Container{
+                {
+                        ... // 9 identical fields
+                        ResizePolicy:  nil,
+                        RestartPolicy: nil,
+                        VolumeMounts: []core.VolumeMount{
+                                {Name: "requests", MountPath: "/requests"},
++                               {Name: "cache-volume", MountPath: "/model-storage"},
+                                {Name: "kube-api-access-bbdfp", ReadOnly: true, MountPath: "/var/run/secrets/kubernetes.io/serviceaccount"},
+                        },
+                        VolumeDevices: nil,
+                        LivenessProbe: nil,
+                        ... // 10 identical fields
+                },
+        },
+        EphemeralContainers: nil,
+        RestartPolicy:       "Always",
+        ... // 28 identical fields
+  }
+
+
+ERROR while executing command "oc --namespace e2e-solution2 cp access-to-harness-data-vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim:/requests/inference-perf_1753469519_inference-gateway-70b-instruct /Users/dpikus/DP_FILES/Data/projects/Inf_Router/repos/dev_bench_inf_perf/results/inference-perf_1753469519_inference-gateway-70b-instruct"
+
+Error from server (BadRequest): pod access-to-harness-data-vllm-p2p-70b-chart-llama-3-70b-instruct-storage-claim does not have a host assigned
+
+
+
+kubectl -n e2e-solution2 scale deployment dima-hash-fix-vllm-llama-3-70b-instruct --replicas 4
+
+
+
+
+k get cm epp-config -o yaml | yq '.data["epp-config.yaml"]'
+
+
+quay.io/dpikus/lm-benchmark:upstream
+
+qps_values: "2 5 8 10 13 17 20"

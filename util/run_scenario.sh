@@ -125,6 +125,7 @@ EOF
     -w $workload
 
 
+
 read -t 30 -p "Run finished. Press enter to kill log capture"
 kill -9 $(jobs -p)
 popd

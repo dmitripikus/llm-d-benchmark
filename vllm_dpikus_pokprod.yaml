@@ -1,0 +1,365 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: '2'
+    meta.helm.sh/release-name: ms-inference-scheduling
+    meta.helm.sh/release-namespace: dpikus-ns
+  resourceVersion: '72654974'
+  name: ms-inference-scheduling-llm-d-modelservice-decode
+  uid: ec0023b7-43d0-4416-83c7-808d725431b5
+  creationTimestamp: '2025-10-23T10:55:52Z'
+  generation: 9
+  managedFields:
+    - manager: helm
+      operation: Update
+      apiVersion: apps/v1
+      time: '2025-10-23T10:55:52Z'
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:annotations':
+            .: {}
+            'f:meta.helm.sh/release-name': {}
+            'f:meta.helm.sh/release-namespace': {}
+          'f:labels':
+            .: {}
+            'f:app.kubernetes.io/managed-by': {}
+            'f:app.kubernetes.io/version': {}
+            'f:helm.sh/chart': {}
+        'f:spec':
+          'f:progressDeadlineSeconds': {}
+          'f:revisionHistoryLimit': {}
+          'f:selector': {}
+          'f:strategy':
+            'f:rollingUpdate':
+              .: {}
+              'f:maxSurge': {}
+              'f:maxUnavailable': {}
+            'f:type': {}
+          'f:template':
+            'f:metadata':
+              'f:labels':
+                .: {}
+                'f:llm-d.ai/inferenceServing': {}
+                'f:llm-d.ai/model': {}
+                'f:llm-d.ai/role': {}
+            'f:spec':
+              'f:volumes':
+                .: {}
+                'k:{"name":"metrics-volume"}':
+                  .: {}
+                  'f:emptyDir': {}
+                  'f:name': {}
+                'k:{"name":"model-storage"}':
+                  .: {}
+                  'f:emptyDir':
+                    .: {}
+                    'f:sizeLimit': {}
+                  'f:name': {}
+                'k:{"name":"torch-compile-cache"}':
+                  .: {}
+                  'f:emptyDir': {}
+                  'f:name': {}
+              'f:containers':
+                'k:{"name":"vllm"}':
+                  'f:image': {}
+                  'f:volumeMounts':
+                    .: {}
+                    'k:{"mountPath":"/.cache"}':
+                      .: {}
+                      'f:mountPath': {}
+                      'f:name': {}
+                    'k:{"mountPath":"/.config"}':
+                      .: {}
+                      'f:mountPath': {}
+                      'f:name': {}
+                    'k:{"mountPath":"/model-cache"}':
+                      .: {}
+                      'f:mountPath': {}
+                      'f:name': {}
+                  'f:terminationMessagePolicy': {}
+                  .: {}
+                  'f:resources':
+                    .: {}
+                    'f:limits':
+                      .: {}
+                      'f:nvidia.com/gpu': {}
+                    'f:requests':
+                      .: {}
+                      'f:nvidia.com/gpu': {}
+                  'f:args': {}
+                  'f:command': {}
+                  'f:env':
+                    'k:{"name":"VLLM_LOGGING_LEVEL"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    'k:{"name":"CUDA_VISIBLE_DEVICES"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    'k:{"name":"DP_SIZE"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    .: {}
+                    'k:{"name":"VLLM_NIXL_SIDE_CHANNEL_PORT"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    'k:{"name":"HF_HOME"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    'k:{"name":"TP_SIZE"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    'k:{"name":"VLLM_NIXL_SIDE_CHANNEL_HOST"}':
+                      .: {}
+                      'f:name': {}
+                      'f:valueFrom':
+                        .: {}
+                        'f:fieldRef': {}
+                    'k:{"name":"UCX_TLS"}':
+                      .: {}
+                      'f:name': {}
+                      'f:value': {}
+                    'k:{"name":"HF_TOKEN"}':
+                      .: {}
+                      'f:name': {}
+                      'f:valueFrom':
+                        .: {}
+                        'f:secretKeyRef': {}
+                  'f:terminationMessagePath': {}
+                  'f:imagePullPolicy': {}
+                  'f:ports':
+                    .: {}
+                    'k:{"containerPort":5557,"protocol":"TCP"}':
+                      .: {}
+                      'f:containerPort': {}
+                      'f:protocol': {}
+                    'k:{"containerPort":8200,"protocol":"TCP"}':
+                      .: {}
+                      'f:containerPort': {}
+                      'f:name': {}
+                      'f:protocol': {}
+                  'f:name': {}
+              'f:dnsPolicy': {}
+              'f:serviceAccount': {}
+              'f:restartPolicy': {}
+              'f:schedulerName': {}
+              'f:terminationGracePeriodSeconds': {}
+              'f:initContainers':
+                .: {}
+                'k:{"name":"routing-proxy"}':
+                  'f:image': {}
+                  'f:terminationMessagePolicy': {}
+                  'f:restartPolicy': {}
+                  .: {}
+                  'f:resources': {}
+                  'f:args': {}
+                  'f:securityContext':
+                    .: {}
+                    'f:allowPrivilegeEscalation': {}
+                    'f:runAsNonRoot': {}
+                  'f:terminationMessagePath': {}
+                  'f:imagePullPolicy': {}
+                  'f:ports':
+                    .: {}
+                    'k:{"containerPort":8000,"protocol":"TCP"}':
+                      .: {}
+                      'f:containerPort': {}
+                      'f:protocol': {}
+                  'f:name': {}
+              'f:serviceAccountName': {}
+              'f:securityContext': {}
+    - manager: kubectl-rollout
+      operation: Update
+      apiVersion: apps/v1
+      time: '2025-10-27T17:28:04Z'
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:spec':
+          'f:template':
+            'f:metadata':
+              'f:annotations':
+                .: {}
+                'f:kubectl.kubernetes.io/restartedAt': {}
+    - manager: kube-controller-manager
+      operation: Update
+      apiVersion: apps/v1
+      time: '2025-10-30T16:44:43Z'
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:annotations':
+            'f:deployment.kubernetes.io/revision': {}
+        'f:status':
+          'f:conditions':
+            .: {}
+            'k:{"type":"Available"}':
+              .: {}
+              'f:lastTransitionTime': {}
+              'f:lastUpdateTime': {}
+              'f:message': {}
+              'f:reason': {}
+              'f:status': {}
+              'f:type': {}
+            'k:{"type":"Progressing"}':
+              .: {}
+              'f:lastTransitionTime': {}
+              'f:lastUpdateTime': {}
+              'f:message': {}
+              'f:reason': {}
+              'f:status': {}
+              'f:type': {}
+          'f:observedGeneration': {}
+          'f:replicas': {}
+          'f:unavailableReplicas': {}
+          'f:updatedReplicas': {}
+      subresource: status
+  namespace: dpikus-ns
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: v0.2.0
+    helm.sh/chart: llm-d-modelservice-v0.2.10
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      llm-d.ai/inferenceServing: 'true'
+      llm-d.ai/model: ms-inference-scheduling-llm-d-modelservice
+      llm-d.ai/role: decode
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        llm-d.ai/inferenceServing: 'true'
+        llm-d.ai/model: ms-inference-scheduling-llm-d-modelservice
+        llm-d.ai/role: decode
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2025-10-27T18:28:04+01:00'
+    spec:
+      restartPolicy: Always
+      initContainers:
+        - restartPolicy: Always
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          name: routing-proxy
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          imagePullPolicy: Always
+          terminationMessagePolicy: File
+          image: 'ghcr.io/llm-d/llm-d-routing-sidecar:v0.3.0'
+          args:
+            - '--port=8000'
+            - '--vllm-port=8200'
+            - '--connector=nixlv2'
+            - '-v=5'
+            - '--secure-proxy=false'
+      serviceAccountName: ms-inference-scheduling-llm-d-modelservice
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30
+      securityContext: {}
+      containers:
+        - resources:
+            limits:
+              nvidia.com/gpu: '1'
+            requests:
+              nvidia.com/gpu: '1'
+          terminationMessagePath: /dev/termination-log
+          name: vllm
+          command:
+            - vllm
+            - serve
+          env:
+            - name: CUDA_VISIBLE_DEVICES
+              value: '0'
+            - name: UCX_TLS
+              value: 'cuda_ipc,cuda_copy,tcp'
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: '5557'
+            - name: VLLM_LOGGING_LEVEL
+              value: DEBUG
+            - name: DP_SIZE
+              value: '1'
+            - name: TP_SIZE
+              value: '1'
+            - name: HF_HOME
+              value: /model-cache
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          ports:
+            - containerPort: 5557
+              protocol: TCP
+            - name: metrics
+              containerPort: 8200
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: metrics-volume
+              mountPath: /.config
+            - name: torch-compile-cache
+              mountPath: /.cache
+            - name: model-storage
+              mountPath: /model-cache
+          terminationMessagePolicy: File
+          image: 'ghcr.io/llm-d/llm-d-cuda:v0.3.0'
+          args:
+            - Qwen/Qwen3-0.6B
+            - '--port'
+            - '8200'
+            - '--served-model-name'
+            - Qwen/Qwen3-0.6B
+            - '--enforce-eager'
+            - '--kv-transfer-config'
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+      serviceAccount: ms-inference-scheduling-llm-d-modelservice
+      volumes:
+        - name: metrics-volume
+          emptyDir: {}
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: model-storage
+          emptyDir:
+            sizeLimit: 20Gi
+      dnsPolicy: ClusterFirst
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+status:
+  observedGeneration: 9
+  replicas: 2
+  updatedReplicas: 2
+  unavailableReplicas: 2
+  conditions:
+    - type: Progressing
+      status: 'True'
+      lastUpdateTime: '2025-10-27T17:28:10Z'
+      lastTransitionTime: '2025-10-23T10:55:52Z'
+      reason: NewReplicaSetAvailable
+      message: ReplicaSet "ms-inference-scheduling-llm-d-modelservice-decode-64df58f47" has successfully progressed.
+    - type: Available
+      status: 'False'
+      lastUpdateTime: '2025-10-30T16:44:33Z'
+      lastTransitionTime: '2025-10-30T16:44:33Z'
+      reason: MinimumReplicasUnavailable
+      message: Deployment does not have minimum availability.

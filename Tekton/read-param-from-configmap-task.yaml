@@ -20,29 +20,53 @@ spec:
         echo "Cloning repository"
         git clone --branch fusionv6-llm-d-inference-scheduling-env --single-branch https://github.com/dmitripikus/llm-d-benchmark.git
         echo "Repository cloned to $(workspaces.shared-workspace.path)/llm-d-benchmark"
-
+        
     - name: read-config
-      image: bitnami/kubectl:latest
+      image: quay.io/podman/stable
+      envFrom:
+        - configMapRef:
+            name: "$(params.configmap-name)"
       securityContext:
         runAsUser: 0
       workingDir: $(workspaces.shared-workspace.path)
       script: |
         #!/bin/sh
-        echo "Reading ConfigMap $(params.configmap-name) ..."
-        # Print the content
-        for f in /config/*; do
-          echo $f
-          cat $f
-        done
-
-        env
+        echo "Environment vars are taken from ConfigMap $(params.configmap-name)"
+        env | sort
+        echo
         
-        #apk add --no-cache yq
-        #work_dir=$(yq e '.work_dir' /config/config.yaml)
-        #hf_token=$(yq e '.hf_token' /config/config.yaml)
-        #echo ""
-        #cd llm-d-benchmark
-        #git status
+        apt update
+
+        # echo "Installing podman ..."
+        # apt install -y podman
+
+        # echo "whoami???"
+        # whoami
+
+
+        echo "Installing dependencies..."
+
+        cd llm-d-benchmark
+        sed -i 's/sudo //g' ./setup/install_deps.sh
+        ./setup/install_deps.sh
+
+        ./run.sh \
+          -p dpikus-ns \
+          -t infra-inference-scheduling-inference-gateway \
+          -k workload-pvc \
+          -m 'Qwen/Qwen3-0.6B' \
+          -w sanity_random.yaml \
+          -l inference-perf
+
+        # Print the content
+        # for f in /config/*; do
+        #   echo $f
+        #   cat $f
+        # done
+
+        #git --git-dir=./llm-d-benchmark/.git status
+
+        
   volumes:
     - name: config-volume
       configMap:
