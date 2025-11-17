@@ -1,0 +1,9 @@
+work_dir: "/Users/dpikus/DP_FILES/Data/projects/llm-d/kv-cache-benchmarking/LLM-D-BENCHMARK/inference-perf"
+hf_token: $HF_TOKEN
+# vllm_common_pvc_name: 
+# vllm_common_pvc_storage_class: ocs-storagecluster-cephfs
+llmbench_image:
+  registry: quay.io
+  repo: dpikus
+  name: llm-d-benchmark
+  tag: v0.2.2_fix

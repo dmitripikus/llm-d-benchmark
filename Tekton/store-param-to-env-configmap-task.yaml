@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: store-param-to-env-configmap
+spec:
+  params:
+    - name: configmap-name
+      type: string
+    - name: data
+      type: string  
+  steps:
+    - name: create-configmap
+      image: bitnami/kubectl:latest
+      script: |
+        #!/bin/sh
+        work_dir=$(yq e '.work_dir' <<<"$(params.data)")
+        hf_token=$(yq e '.hf_token' <<<"$(params.data)")
+        llmbench_image_registry=$(yq e '.llmbench_image.registry' <<<"$(params.data)")
+        llmbench_image_repo=$(yq e '.llmbench_image.repo' <<<"$(params.data)")
+        llmbench_image_name=$(yq e '.llmbench_image.name' <<<"$(params.data)")
+        llmbench_image_tag=$(yq e '.llmbench_image.tag' <<<"$(params.data)")
+
+        echo "Creating ConfigMap $(params.configmap-name)..."
+        kubectl create configmap $(params.configmap-name) \
+          --from-literal=LLMDBENCH_CONTROL_WORK_DIR="$work_dir" \
+          --from-literal=LLMDBENCH_HF_TOKEN="$hf_token" \
+          --from-literal=LLMDBENCH_IMAGE_REGISTRY="$llmbench_image_registry" \
+          --from-literal=LLMDBENCH_IMAGE_REPO="$llmbench_image_repo" \
+          --from-literal=LLMDBENCH_IMAGE_NAME="$llmbench_image_name" \
+          --from-literal=LLMDBENCH_IMAGE_TAG="$llmbench_image_tag" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl get cm $(params.configmap-name)  

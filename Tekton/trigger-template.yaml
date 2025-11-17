@@ -1,0 +1,20 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: get-pods-template
+spec:
+  params:
+  - name: username
+    default: "Kubernetes"
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: get-pods-pipeline-run-
+    spec:
+      serviceAccountName: tekton-robot
+      pipelineRef:
+        name: get-pods-pipeline
+      params:
+      - name: username
+        value: $(tt.params.username)

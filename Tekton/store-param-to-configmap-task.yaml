@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: store-param-to-configmap
+spec:
+  params:
+    - name: configmap-name
+      type: string
+    - name: data
+      type: string  
+  steps:
+    - name: create-configmap
+      image: bitnami/kubectl:latest
+      script: |
+        #!/bin/sh
+        echo "Creating ConfigMap $(params.configmap-name)..."
+        kubectl create configmap $(params.configmap-name) \
+          --from-literal=config.yaml="$(params.data)" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl get cm $(params.configmap-name)  
