@@ -23,6 +23,7 @@ spec:
       value: "$(params.model-id)"
     - name: LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
       value: "http://experiment-gateway-inference-gateway.$(params.namespace).svc.cluster.local:80"
+      #TODO: Check this URL!!!
 
     - name: DATA_ROOT_DIR
       value: $(workspaces.data.path)

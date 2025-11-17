@@ -33,7 +33,7 @@ spec:
 
     # Properties needed to evaluate stack capacity (will it be able to host the model)?
     - name: validateCapacity
-      default: "true"
+      default: "false"
     - name: behaviorOnValidationFailure
       default: "terminate"
 
@@ -157,10 +157,14 @@ spec:
       default: "false"
     - name: step-upload-results
       type: string
-      default: "true"
+      default: "false"
     - name: dry-run
       type: string 
       default: "false"
+    - name: run-step
+      type: string 
+      default: "false"
+
 
   results:
     - name: treatmentAnalysisModelservice
@@ -345,7 +349,8 @@ spec:
         #!/bin/sh
 
         NAMESPACE="$(params.targetNamespacePrefix)-$(context.taskRun.name)"
-        DRY_RUN="$(params.dry-run)"
+        #DRY_RUN="$(params.dry-run)"
+        DRY_RUN="true"
 
         if [ "${DRY_RUN}" = "true" ]; then
           echo ">> skipping"
@@ -499,6 +504,10 @@ spec:
     - name: model-engine
       ref: 
         name: helm-upgrade-install
+      when:
+        - input: $(params.run-step)
+          operator: in
+          values: [ "true" ]
       params:
         - name: releaseName
           value: $(params.experimentName)-ms
@@ -524,9 +533,13 @@ spec:
           value: "$(steps.analyze-modelservice-factors.results.treatmentAnalysis)"
 
         - name: dry-run
-          value: $(params.dry-run)
+          value: $(params.dry-run)        
 
     - name: wait-for-model
+      when:
+        - input: $(params.run-step)
+          operator: in
+          values: [ "true" ]
       env:
         - name: DECODE_REPLICAS
           value: $(steps.compute-capacity-validation-values.results.decodeReplicas)

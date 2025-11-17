@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: experiment-matrix-run
+spec:
+  taskRunTemplate:
+    serviceAccountName: helm-installer
+  workspaces:
+  - name: data
+    persistentVolumeClaim:
+      claimName: workspace-pvc
+  pipelineSpec:
+    workspaces:
+    - name: data
+    tasks:
+    - name: run-experiment-0
+      taskRef:
+        name: experiment
+      workspaces:
+      - name: data
+        workspace: data
+      params:
+      - name: namespace
+        value: dean-ns
+      - name: model-id
+        value: Qwen/Qwen3-0.6B
+      - name: stackBaseUrl
+        value: https://raw.githubusercontent.com/dmitripikus/llm-d-benchmark/refs/heads/dean-ns-tekton/tekton-poc/examples/inference-scheduling
+      - name: harnessProfile
+        value: sanity_random.yaml
+      - name: gaiePluginConfig
+        value: inf-sche-none.yaml
