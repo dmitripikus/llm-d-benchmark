@@ -25,4 +25,7 @@ spec:
     - name: config
       configMap:
         name: inference-perf-config
+    - name: llm-d-hf-token
+      secret:
+        secretName: llm-d-hf-token    
 

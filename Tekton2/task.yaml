@@ -17,46 +17,50 @@ spec:
       description: "Where to write the result summary file"
       default: "/workspace/results.json"
   steps:
-    - name: print-info
-      image: alpine:3.18
-      script: |
-        #!/bin/sh
-        echo PRINT_INFOOOOOOOOOOOOOO
-        echo pwd: $PWD
-        echo results file: "$(params.result-file)"
-        echo config file: "$(params.config-file)"
-        echo path: "$(workspaces.config.path)"
-        echo mount: $(ls /*)
-        ls "$(workspaces.config.path)"
-        cat "$(workspaces.config.path)"/*
-        echo SOURCES
-        echo "$(workspaces.source.path)"
-        echo I am here1 
-        ls "$(workspaces.source.path)"
-        echo I am here 2
-        ls /workspace
-        ls -la /workspace/source/inference-perf
-        echo PRINT_INFOOOOOOOOOOOOOO END
+    # - name: print-info
+    #   image: alpine:3.18
+    #   script: |
+    #     #!/bin/sh
+    #     echo PRINT_INFOOOOOOOOOOOOOO
+    #     echo pwd: $PWD
+    #     echo results file: "$(params.result-file)"
+    #     echo config file: "$(params.config-file)"
+    #     echo path: "$(workspaces.config.path)"
+    #     echo mount: $(ls /*)
+    #     ls "$(workspaces.config.path)"
+    #     cat "$(workspaces.config.path)"/*
+    #     echo SOURCES
+    #     echo "$(workspaces.source.path)"
+    #     echo I am here1 
+    #     ls "$(workspaces.source.path)"
+    #     echo I am here 2
+    #     ls /workspace
+    #     ls -la /workspace/source/inference-perf
+    #     echo PRINT_INFOOOOOOOOOOOOOO END
 
     - name: run-benchmark
-      #image: "ghcr.io/kubernetes-sigs/inference-perf:latest"
-      image: alpine:3.18
-      workingDir: "$(workspaces.config.path)"
+      image: python:3.12.9-slim-bookworm
+      workingDir: $(workspaces.source.path)/inference-perf
       script: |
         #!/bin/sh
         set -e
-        echo "Using config: $(params.config-file)"
-        echo "Using results: $(params.result-file)"
+        echo "Using config: $(workspaces.config)/config-synthetic.yml"
+        mkdir -p $(workspaces)/results
+        echo "Using results: $(workspaces)/results"
+
+        # install inference-perf
+        pip install .
+        ls -la $(workspaces.llm-d-hf-token)
 
         # Run benchmark and write output to the designated result-file path
         #inference-perf --config_file $(params.config-file) > $(params.result-file)
-        cat <(echo This is the config file:) $(params.config-file) > $(params.result-file)
+        #cat <(echo This is the config file:) $(params.config-file) > $(params.result-file)
         
         # --- NEW: Write a snippet of the result to the Tekton Result file ---
         # The Task API expects results to be written to /tekton/results/<name>
         # We read the first 100 lines of the generated results.json file 
         # and pipe it to the Task Result path.
-        head -n 5 "$(params.result-file)" > "$(results.perf-summary.path)"
+        #head -n 5 "$(params.result-file)" > "$(results.perf-summary.path)"
 
     - name: cat-results
       image: alpine:3.18
