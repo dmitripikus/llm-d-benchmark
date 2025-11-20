@@ -1,0 +1,28 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: inference-perf-pipelinerun14
+spec:
+  taskRunSpecs:
+    - pipelineTaskName: clone-repo
+      podTemplate:
+        securityContext:
+          fsGroup: 65532
+
+  pipelineRef:
+    name: inference-perf-pipeline
+
+  params:
+    - name: repo-url
+      value: "https://github.com/kubernetes-sigs/inference-perf.git"
+    - name: repo-revision
+      value: "main"
+
+  workspaces:
+    - name: source
+      persistentVolumeClaim:
+        claimName: tekton-shared
+    - name: config
+      configMap:
+        name: inference-perf-config
+

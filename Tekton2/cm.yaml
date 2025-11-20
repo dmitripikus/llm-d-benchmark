@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-perf-config
+data:
+  kuku.yml: |
+    a: b
+  config-synthetic.yml: |
+    dataset:
+      type: synthetic
+      synthetic:
+        prompt:
+          length:
+            min: 8
+            max: 8
+        response:
+          length:
+            min: 32
+            max: 32
+
+    server:
+      url: "http://localhost:8200/v1"
+
+    load_generator:
+      stages:
+        - duration: "60s"
+          qps: 5
+          concurrency: 2
+      policy: "constant"
+
+    requests:
+      total: 1000
+
+    model:
+      name: "my-model"
+
+    headers:
+      Authorization: "Bearer TOKEN"
+
+    metrics:
+      export:
+        prometheus:
+          address: "0.0.0.0:9090"

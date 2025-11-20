@@ -1,0 +1,81 @@
+# pipelines/inference-perf-pipeline.yaml
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: inference-perf-pipeline
+spec:
+  params:
+    - name: repo-url
+    - name: repo-revision
+
+  workspaces:
+    - name: source
+    - name: config
+  tasks:
+   # 1) Clone the repo
+    - name: clone-repo
+      runAfter:
+        - clean-task    
+
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: source
+      params:
+        - name: url
+          value: "$(params.repo-url)"
+        - name: revision
+          value: "$(params.repo-revision)"
+        - name: subdirectory
+          value: "inference-perf"
+
+    - name: clean-task
+      taskSpec:                        # <-- inline Task definition here
+        description: "A simple test task"
+        workspaces:
+          - name: source
+        steps:
+          - name: clean-workspace
+            image: ubuntu:22.04
+            script: |
+              #!/usr/bin/env bash
+              echo DELETE WORKSPACE
+              echo "$(workspaces.source.path)"
+              cd "$(workspaces.source.path)"
+              rm -r *
+          # - name: print-message
+          #   image: ubuntu:22.04
+          #   script: |
+          #     #!/usr/bin/env bash
+          #     echo PPPPprint-messagePPPP
+          #     echo "$(workspaces.source.path)"
+          #     cd "$(workspaces.source.path)"
+          #     echo PWD
+          #     pwd
+          #     ls -l .
+          #     ls -l ..
+          #     echo "ttt" > ttt.txt
+          #     echo "yyy" > /workspace/source/yyy.txt
+          #     mkdir -p /workspace/source/ddd
+          #     echo AFTER DIR CREATE
+          #     ls -l /workspace/source/   
+      workspaces:
+        - name: source
+ 
+
+    - name: run-perf
+      runAfter:
+        - clone-repo    
+      taskRef:
+        name: run-inference-perf
+      workspaces:
+        - name: config
+          workspace: config
+        - name: source
+          workspace: source
+      params:
+        - name: config-file
+          value: "/workspace/config/config-synthetic.yml"
+        - name: result-file
+          value: "/workspace/source/res.out"

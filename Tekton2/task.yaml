@@ -1,0 +1,74 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: run-inference-perf
+spec:
+  workspaces:
+    - name: source
+    - name: config
+  params:
+    - name: config-file
+      type: string
+      description: "Path to the inference-perf config file inside workspace"
+      # Corrected default path for ConfigMap mounting
+      default: "$(workspaces.config.path)/config-synthetic.yml" 
+    - name: result-file
+      type: string
+      description: "Where to write the result summary file"
+      default: "/workspace/results.json"
+  steps:
+    - name: print-info
+      image: alpine:3.18
+      script: |
+        #!/bin/sh
+        echo PRINT_INFOOOOOOOOOOOOOO
+        echo pwd: $PWD
+        echo results file: "$(params.result-file)"
+        echo config file: "$(params.config-file)"
+        echo path: "$(workspaces.config.path)"
+        echo mount: $(ls /*)
+        ls "$(workspaces.config.path)"
+        cat "$(workspaces.config.path)"/*
+        echo SOURCES
+        echo "$(workspaces.source.path)"
+        echo I am here1 
+        ls "$(workspaces.source.path)"
+        echo I am here 2
+        ls /workspace
+        ls -la /workspace/source/inference-perf
+        echo PRINT_INFOOOOOOOOOOOOOO END
+
+    - name: run-benchmark
+      #image: "ghcr.io/kubernetes-sigs/inference-perf:latest"
+      image: alpine:3.18
+      workingDir: "$(workspaces.config.path)"
+      script: |
+        #!/bin/sh
+        set -e
+        echo "Using config: $(params.config-file)"
+        echo "Using results: $(params.result-file)"
+
+        # Run benchmark and write output to the designated result-file path
+        #inference-perf --config_file $(params.config-file) > $(params.result-file)
+        cat <(echo This is the config file:) $(params.config-file) > $(params.result-file)
+        
+        # --- NEW: Write a snippet of the result to the Tekton Result file ---
+        # The Task API expects results to be written to /tekton/results/<name>
+        # We read the first 100 lines of the generated results.json file 
+        # and pipe it to the Task Result path.
+        head -n 5 "$(params.result-file)" > "$(results.perf-summary.path)"
+
+    - name: cat-results
+      image: alpine:3.18
+      workingDir: "$(workspaces.config.path)"
+      script: |
+        #!/bin/sh
+        echo "===== Benchmark Results (full file) ====="
+        cat "$(params.result-file)"
+
+  results:
+    - name: perf-summary
+      description: "Benchmark summary JSON file"
+      # REMOVED: path: "$(params.result-file)" - This was the error.
+      # The value for this result will be populated by the step writing to 
+      # "$(results.perf-summary.path)"
