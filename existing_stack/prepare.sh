@@ -35,8 +35,8 @@ export LLMDBENCH_MAIN_DIR=$(realpath ${LLMDBENCH_CONTROL_DIR}/../)
 
 source ${LLMDBENCH_CONTROL_DIR}/env.sh
 function sanitize_dir_name {
--  sed -e 's/[^0-9A-Za-z_-][^0-9A-Za-z_-]*/_/g' <<<"$1"
--}
+  sed -e 's/[^0-9A-Za-z_-][^0-9A-Za-z_-]*/_/g' <<<"$1"
+}
 
 export LLMDBENCH_CONTROL_VERBOSE=${LLMDBENCH_CONTROL_VERBOSE:-0}
 export LLMDBENCH_DEPLOY_SCENARIO=
@@ -49,12 +49,12 @@ function show_usage {
   cat <<USAGE
 Usage: ${LLMDBENCH_CONTROL_CALLER} [options] 
   -c/--scenario [take environment variables from a scenario file (default=$LLMDBENCH_DEPLOY_SCENARIO)]
-  -m/--models [list the models to be run against (default=$LLMDBENCH_DEPLOY_MODEL_LIST)]
+  -m/--models [list the models to be run against (default=$LLMDBENCH_DEPLOY_MODEL_LIST), use "auto" to auto-detect the model served by the stack]
   -p/--namespace [comma separated pair of values indicating where a stack was stood up and where to run (default=$LLMDBENCH_VLLM_COMMON_NAMESPACE,$LLMDBENCH_HARNESS_NAMESPACE)]
   -t/--methods [list of standup methods (default=$LLMDBENCH_DEPLOY_METHODS, possible values "standalone", "modelservice" or any other string - pod name or service name - matching a resource on cluster)]
   -U/--endpoint_url [url of the stack endpoint to be benchmarked (default=$LLMDBENCH_HARNESS_STACK_ENDPOINT_URL); if provided , overrides method detection]
   -l/--harness [harness used to generate load (default=$LLMDBENCH_HARNESS_NAME, possible values $(get_harness_list)]
-  -w/--workload [workload to be used by the harness (default=$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE, possible values (check "workload/profiles" dir)]
+  -w/--workload [workload to be used by the harness (default=$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE, possible values (check \"${LLMDBENCH_HARNESS_PROFILES_DIR}\" dir)]
   -k/--pvc [name of the PVC used to store the results (default=$LLMDBENCH_HARNESS_PVC_NAME)]
   -e/--experiments [path of yaml file containing a list of factors and levels for an experiment, useful for parameter sweeping (default=$LLMDBENCH_HARNESS_EXPERIMENT_TREATMENTS)]
   -o/--overrides [comma-separated list of workload profile parameters to be overridden (default=$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE_OVERRIDES)]
@@ -103,10 +103,10 @@ while [[ $# -gt 0 ]]; do
     shift
     ;;
     -j=*|--parallelism=*)
-    export LLMDBENCH_CLIOVERRIDE_HARNESS_LOAD_PARALLELISMT=$(echo $key | cut -d '=' -f 2)
+    export LLMDBENCH_CLIOVERRIDE_HARNESS_LOAD_PARALLELISM=$(echo $key | cut -d '=' -f 2)
     ;;
     -j|--parallelism)
-    export LLMDBENCH_CLIOVERRIDE_HARNESS_LOAD_PARALLELISMT="$2"
+    export LLMDBENCH_CLIOVERRIDE_HARNESS_LOAD_PARALLELISM="$2"
     shift
     ;;
     -s=*|--wait=*)
@@ -160,9 +160,11 @@ while [[ $# -gt 0 ]]; do
     ;;
     -U=*|--endpoint_url=*)
     export LLMDBENCH_CLIOVERRIDE_HARNESS_STACK_ENDPOINT_URL=$(echo $key | cut -d '=' -f 2)
+    export LLMDBENCH_CLIOVERRIDE_DEPLOY_METHODS="${LLMDBENCH_CLIOVERRIDE_DEPLOY_METHODS:=URL}"
     ;;
     -U|--undpoint_url)
     export LLMDBENCH_CLIOVERRIDE_HARNESS_STACK_ENDPOINT_URL="$2"
+    export LLMDBENCH_CLIOVERRIDE_DEPLOY_METHODS="${LLMDBENCH_CLIOVERRIDE_DEPLOY_METHODS:=URL}"
     shift
     ;;
     -x=*|--dataset=*)
@@ -172,10 +174,6 @@ while [[ $# -gt 0 ]]; do
     export LLMDBENCH_CLIOVERRIDE_RUN_DATASET_URL="$2"
     shift
     ;;
-    # -u|--wva)
-    # export LLMDBENCH_WVA_ENABLED=1
-    # ;;
-    # ALWAYS SKIP
     # -z|--skip)
     # export LLMDBENCH_CLIOVERRIDE_HARNESS_SKIP_RUN=1
     # ;;
@@ -236,14 +234,10 @@ set -euo pipefail
 export LLMDBENCH_CURRENT_STEP=99
 : ${LLMDBENCH_HARNESS_STACK_ENDPOINT_URL:=}
 
-if [[ ! -z ${LLMDBENCH_HARNESS_STACK_ENDPOINT_URL} ]]; then
-  export LLMDBENCH_DEPLOY_METHODS="custom URL"
-fi
-
 for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
   for model in ${LLMDBENCH_DEPLOY_MODEL_LIST//,/ }; do
 
-    announce "🔍 Preparing to benchmark existing stack deployed via method \"$method\" for model \"$model\""
+    announce "ℹ️ Preparing to benchmark existing stack deployed via method \"$method\" for model \"$model\""
 
     if [[ $LLMDBENCH_HARNESS_DEBUG -eq 1 ]]; then
       export LLMDBENCH_RUN_HARNESS_LAUNCHER_NAME=llmdbench-harness-launcher
@@ -255,20 +249,27 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
     export LLMDBENCH_VLLM_FQDN=".${LLMDBENCH_VLLM_COMMON_NAMESPACE}${LLMDBENCH_VLLM_COMMON_FQDN}"
 
     if [[ $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_STANDALONE_ACTIVE -eq 1 ]]; then
-      export LLMDBENCH_CONTROL_ENV_VAR_LIST_TO_POD="LLMDBENCH_BASE64_CONTEXT_CONTENTS|^LLMDBENCH_VLLM_COMMON|^LLMDBENCH_VLLM_STANDALONE|^LLMDBENCH_DEPLOY"
+      export LLMDBENCH_CONTROL_ENV_VAR_LIST_TO_POD="LLMDBENCH_RUN_EXPERIMENT|LLMDBENCH_BASE64_CONTEXT_CONTENTS|^LLMDBENCH_VLLM_COMMON|^LLMDBENCH_VLLM_STANDALONE|^LLMDBENCH_DEPLOY|^LLMDBENCH_HARNESS|^LLMDBENCH_RUN"
       export LLMDBENCH_HARNESS_STACK_TYPE=vllm-prod
       export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get service --no-headers -l stood-up-via=${LLMDBENCH_DEPLOY_METHODS} | awk '{print $1}' || true)
+      export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=${LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME}${LLMDBENCH_VLLM_FQDN}
       export LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT=80
     fi
 
     if [[ $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_MODELSERVICE_ACTIVE -eq 1 ]]; then
-      export LLMDBENCH_CONTROL_ENV_VAR_LIST_TO_POD="LLMDBENCH_BASE64_CONTEXT_CONTENTS|^LLMDBENCH_VLLM_COMMON|^LLMDBENCH_VLLM_MODELSERVICE|^LLMDBENCH_DEPLOY|^LLMDBENCH_VLLM_INFRA|^LLMDBENCH_VLLM_GAIE|^LLMDBENCH_LLMD_IMAGE"
+      export LLMDBENCH_CONTROL_ENV_VAR_LIST_TO_POD="LLMDBENCH_RUN_EXPERIMENT|LLMDBENCH_BASE64_CONTEXT_CONTENTS|^LLMDBENCH_VLLM_COMMON|^LLMDBENCH_VLLM_MODELSERVICE|^LLMDBENCH_DEPLOY|^LLMDBENCH_VLLM_INFRA|^LLMDBENCH_VLLM_GAIE|^LLMDBENCH_LLMD_IMAGE|^LLMDBENCH_HARNESS|^LLMDBENCH_RUN"
       export LLMDBENCH_HARNESS_STACK_TYPE=llm-d
-      export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get gateway --no-headers -l stood-up-via=${LLMDBENCH_DEPLOY_METHODS} | awk '{print $1}')
+      export LLMDBENCH_HARNESS_STACK_ENDPOINT_INFO=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get gateway --no-headers -l stood-up-via=${LLMDBENCH_DEPLOY_METHODS} -o json)
+      export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(echo $LLMDBENCH_HARNESS_STACK_ENDPOINT_INFO | jq -r '.items[0].status.addresses[0] | select(.type=="Hostname") | .value')
+        if [[ $LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME == "null" || -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME ]]; then
+            export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(echo $LLMDBENCH_HARNESS_STACK_ENDPOINT_INFO | jq -r '.items[0].metadata.name')
+            export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=${LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME}${LLMDBENCH_VLLM_FQDN}
+        fi
       export LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT=80
     fi
   
-    if [[ $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_STANDALONE_ACTIVE -eq 1 || 
+    if [[ -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_URL ]] &&  
+       [[ $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_STANDALONE_ACTIVE -eq 1 || 
           $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_MODELSERVICE_ACTIVE -eq 1 ]]; then
 
       if [[ -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME ]]; then
@@ -279,19 +280,20 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
       export LLMDBENCH_HARNESS_STACK_ENDPOINT_URL="http://${LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME}${LLMDBENCH_VLLM_FQDN}:${LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT}"
     else
       announce "⚠️ Deployment method - $LLMDBENCH_DEPLOY_METHODS - is neither \"standalone\" nor \"modelservice\". "
-      export LLMDBENCH_CONTROL_ENV_VAR_LIST_TO_POD="LLMDBENCH_BASE64_CONTEXT_CONTENTS|^LLMDBENCH_VLLM_COMMON_NAMESPACE|^LLMDBENCH_DEPLOY_CURRENT"
+      export LLMDBENCH_CONTROL_ENV_VAR_LIST_TO_POD="LLMDBENCH_RUN_EXPERIMENT|LLMDBENCH_BASE64_CONTEXT_CONTENTS|^LLMDBENCH_VLLM_COMMON_NAMESPACE|^LLMDBENCH_DEPLOY_CURRENT|^LLMDBENCH_HARNESS|^LLMDBENCH_RUN"
       export LLMDBENCH_HARNESS_STACK_TYPE=vllm-prod
       # export LLMDBENCH_DEPLOY_CURRENT_MODEL="auto"  # @TODO check if needed
     fi
 
-    if [[ -z ${LLMDBENCH_HARNESS_STACK_ENDPOINT_URL} ]]; then
-      announce "🔍 Trying to find a matching endpoint name..."
+    if [[ -z ${LLMDBENCH_HARNESS_STACK_ENDPOINT_URL} ]]; then   
+      # note: url already set for standalone/modelservice
+      announce "🔍 Trying to find a matching endpoint name on namespace ($LLMDBENCH_VLLM_COMMON_NAMESPACE)..."
 
       # check for service first
-      export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get service --no-headers | awk '{print $1}' | grep ${LLMDBENCH_DEPLOY_METHODS} || true)
+      export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get service --no-headers | awk '{print $1}' | grep -m 1 ${LLMDBENCH_DEPLOY_METHODS} || true)
       if [[ ! -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME ]]; then
         announce "ℹ️ ${LLMDBENCH_DEPLOY_METHODS} detected as service \"$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME\""
-        for i in default; do
+        for i in default http; do
           export LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get service/$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME --no-headers -o json | jq -r ".spec.ports[] | select(.name == \"$i\") | .port")
           if [[ ! -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT ]]; then
             break
@@ -303,14 +305,36 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
         fi
       else
         # check for pod next
-        export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get pod --no-headers | awk '{print $1}' | grep ${LLMDBENCH_DEPLOY_METHODS} | head -n 1 || true)
+        export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get pod --no-headers | awk '{print $1}' | grep -m 1 ${LLMDBENCH_DEPLOY_METHODS} | head -n 1 || true)
         export LLMDBENCH_VLLM_FQDN=
         if [[ ! -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME ]]; then
           announce "ℹ️ ${LLMDBENCH_DEPLOY_METHODS} detected as pod \"$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME\""
-          export LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get pod/$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME --no-headers -o json | jq -r ".spec.containers[0].ports[0].containerPort")
+          # try to get port from liveness or readiness probe
+          for probe in livenessProbe readinessProbe; do
+            export LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT=$(
+              ${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get pod/$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME --no-headers -o json |
+              jq -r ".spec.containers[0].${probe}.httpGet.port" ||
+              true
+            )
+            if [[ ! -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT && $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT != "null" ]]; then
+              break
+            fi
+          done
+          if [[ -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT || $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT == "null" ]]; then
+            # try to use metrics port (should work for default vLLM
+            export LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT=$(
+              ${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get pod/$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME --no-headers -o json |
+              jq -r ".spec.containers[0].ports[] | select(.name == \"metrics\") | .containerPort" ||
+              true
+            )
+          fi
+          if [[ -z $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT || $LLMDBENCH_HARNESS_STACK_ENDPOINT_PORT == "null" ]]; then
+            announce "❌ ERROR: could not find a port for endpoint name \"$$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME\""
+            exit 1
+          fi
           export LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get pod/$LLMDBENCH_HARNESS_STACK_ENDPOINT_NAME --no-headers -o json | jq -r ".status.podIP")
         else
-          announce "❌ ERROR: could not find a service or pod to match \"$LLMDBENCH_DEPLOY_METHODS\""
+          announce "❌ ERROR: could not find an endpoint name (service or pod) for a stack that matches \"$LLMDBENCH_DEPLOY_METHODS\""
           exit 1
         fi
       fi
@@ -327,7 +351,7 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
     
     if [[ $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_STANDALONE_ACTIVE -eq 0 && $LLMDBENCH_CONTROL_ENVIRONMENT_TYPE_MODELSERVICE_ACTIVE -eq 0 ]]; then
       if ! ${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get secret "${LLMDBENCH_VLLM_COMMON_HF_TOKEN_NAME}" 2>&1 > /dev/null; then
-        export LLMDBENCH_VLLM_COMMON_HF_TOKEN_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get secrets --no-headers | grep -E llm-d-hf.*token.* | awk '{print $1}')
+        export LLMDBENCH_VLLM_COMMON_HF_TOKEN_NAME=$(${LLMDBENCH_CONTROL_KCMD} --namespace "$LLMDBENCH_VLLM_COMMON_NAMESPACE" get secrets --no-headers | grep -m 1 -E llm-d-hf.*token.* | awk '{print $1}')
         if [[ -z $LLMDBENCH_VLLM_COMMON_HF_TOKEN_NAME ]]; then
           announce "❌ ERROR: could not find a hugging face token"
           exit 1
@@ -361,10 +385,10 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
     if [[ "${received_model_name}" == "${model}" ]]; then
       announce "ℹ️ Stack model detected is \"$received_model_name\", matches requested \"$model\""
     elif [[ -z "${received_model_name}" ]]; then
-      announce "⚠️ Requested model \"$model\" could be detected on stack"
+      announce "⚠️ Requested model \"$model\" could not be detected on stack"
     else
       announce "❌ Stack model detected is \"$received_model_name\" (instead of \"$model\")!"
-      exit 1
+      # exit 1    # @TODO decide if this is fatal
     fi
 
     export LLMDBENCH_DEPLOY_CURRENT_MODEL=$(model_attribute "${model}" model)
@@ -381,9 +405,9 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
 
     generate_profile_parameter_treatments ${LLMDBENCH_HARNESS_NAME} ${LLMDBENCH_HARNESS_EXPERIMENT_TREATMENTS}
 
-    workload_template_full_path=$(find ${LLMDBENCH_MAIN_DIR}/workload/profiles/${LLMDBENCH_HARNESS_NAME}/ | grep ${LLMDBENCH_HARNESS_EXPERIMENT_PROFILE} | head -n 1 || true)
+    workload_template_full_path=$(find ${LLMDBENCH_HARNESS_PROFILES_DIR}/${LLMDBENCH_HARNESS_NAME}/ | grep -m 1 ${LLMDBENCH_HARNESS_EXPERIMENT_PROFILE} | head -n 1 || true)
     if [[ -z $workload_template_full_path ]]; then
-      announce "❌ Could not find workload template \"$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE\" inside directory \"${LLMDBENCH_MAIN_DIR}/workload/profiles/${LLMDBENCH_HARNESS_NAME}/\" (variable $LLMDBENCH_HARNESS_EXPERIMENT_PROFILE)"
+      announce "❌ Could not find workload template \"$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE\" inside directory \"${LLMDBENCH_HARNESS_PROFILES_DIR}/${LLMDBENCH_HARNESS_NAME}/\" (variable $LLMDBENCH_HARNESS_EXPERIMENT_PROFILE)"
       exit 1
     fi
 
@@ -402,7 +426,7 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
     
     # Convert environment variables to YAML configuration as input for run 
     # ============================================================
-    announce "🔍 Preparing run_configuration for harness \"$LLMDBENCH_HARNESS_NAME\" (profile: \"$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE\")"
+    announce "ℹ️ Preparing run_configuration for harness \"$LLMDBENCH_HARNESS_NAME\" (profile: \"$LLMDBENCH_HARNESS_EXPERIMENT_PROFILE\")"
     config_file_name="${workload_template_full_path##*/}"
     config_file_name="${config_file_name%.in}"
     config_file_name="${LLMDBENCH_HARNESS_NAME}_${config_file_name%.yaml}".yaml
@@ -412,7 +436,7 @@ for method in ${LLMDBENCH_DEPLOY_METHODS//,/ }; do
     exec 3> >(tee -a "${config_file_path}")
     cat <<YAML >&3
 endpoint:
-  stack_name: &stack_name $LLMDBENCH_HARNESS_STACK_NAME    # user defined name for the stack (results prefix)
+  stack_name: &stack_name $(sanitize_dir_name "${LLMDBENCH_HARNESS_STACK_NAME}")    # user defined name for the stack (results prefix)
   model: &model $LLMDBENCH_DEPLOY_CURRENT_MODEL    # Exact HuggingFace model name. Must match stack deployed.
   namespace: &namespace $LLMDBENCH_CONTROL_CLUSTER_NAMESPACE    # Namespace where stack is deployed
   base_url: &url $LLMDBENCH_HARNESS_STACK_ENDPOINT_URL    # Base URL of inference endpoint
@@ -435,18 +459,14 @@ harness:
   parallelism: $LLMDBENCH_HARNESS_LOAD_PARALLELISM    # Number of parallel workload launcher pods to create.  
   image: $(get_image ${LLMDBENCH_IMAGE_REGISTRY} ${LLMDBENCH_IMAGE_REPO} ${LLMDBENCH_IMAGE_NAME} ${LLMDBENCH_IMAGE_TAG})
   experiment_prefix: [ *stack_name, *harness_name ]
-  dataset_url: &dataset_url $LLMDBENCH_RUN_DATASET_URL    # URL to download dataset from
-  dataset_path: &dataset_path none                                
+  dataset_url: &dataset_url ${LLMDBENCH_RUN_DATASET_URL:-none}    # URL to download dataset from
 
 workload:    # yaml configuration for harness workload(s)
 YAML
 
     for treatment_path in $(ls ${LLMDBENCH_CONTROL_WORK_DIR}/workload/profiles/${LLMDBENCH_HARNESS_NAME}/*.yaml); do
-      # announce "🔍 Processing treatment file ${treatment_path}"
       workload_file=$(echo "${treatment_path}" | rev | cut -d '/' -f 1 | rev)
-      # announce "🔍 Processing workload file ${workload_file}"
-      treatment_file=$(cat "${treatment_path}" | grep "#treatment" | tail -1 | $LLMDBENCH_CONTROL_SCMD 's/^#//' || true)
-      # announce "🔍 Processing treatment file indicator ${treatment_file}"
+      treatment_file=$(cat "${treatment_path}" | grep -m 1 "#treatment" | tail -1 | $LLMDBENCH_CONTROL_SCMD 's/^#//' || true)
       if [[ -f "${LLMDBENCH_CONTROL_WORK_DIR}/workload/profiles/${LLMDBENCH_HARNESS_NAME}/treatment_list/$treatment_file" ]]; then
         workload_name=$(sanitize_dir_name "${treatment_file%.txt}")
       else
