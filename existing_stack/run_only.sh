@@ -120,72 +120,81 @@ function start_harness_pod {
     local is_dataset_url=""
   fi  
 
-  ${control_kubectl} --namespace ${harness_namespace} delete pod ${pod_name} --ignore-not-found
+  ${control_kubectl} --namespace ${harness_namespace} delete statefulset ${pod_name} --ignore-not-found
 
   cat <<EOF | yq '.spec.containers[0].env = load("'${_config_file}'").env + .spec.containers[0].env' | ${control_kubectl} apply -f -
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
   name: ${pod_name}
   namespace: ${harness_namespace}
-  labels:
-    app: ${HARNESS_POD_LABEL}
 spec:
-  containers:
-  - name: harness
-    image: ${harness_image}
-    imagePullPolicy: Always
-    securityContext:
-      runAsUser: 0
-    command: ["sh", "-c"]
-    args:
-    - "sleep 1000000"
-    resources:
-      limits:
-        cpu: "${HARNESS_CPU_NR}"
-        memory: ${HARNESS_CPU_MEM}
-      requests:
-        cpu: "${HARNESS_CPU_NR}"
-        memory: ${HARNESS_CPU_MEM}
-    env:
-    - name: LLMDBENCH_RUN_WORKSPACE_DIR
-      value: "/workspace"
-    - name: LLMDBENCH_MAGIC_ENVAR
-      value: "harness_pod"
-    - name: LLMDBENCH_HARNESS_NAME
-      value: "${harness_name}"
-    - name: LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX
-      value: "${RESULTS_DIR_PREFIX}"
-    - name: LLMDBENCH_RUN_DATASET_DIR
-      value: "${DATASET_DIR}"
-    ${is_dataset_url}- name: LLMDBENCH_RUN_DATASET_URL
-    ${is_dataset_url}  value: "${harness_dataset_url}"
-    - name: LLMDBENCH_HARNESS_STACK_NAME
-      value: "${endpoint_stack_name}"  
-    volumeMounts:
-    - name: results
-      mountPath: ${RESULTS_DIR_PREFIX}
-    - name: "${harness_name}-profiles"
-      mountPath: /workspace/profiles/${harness_name}  
-  volumes:
-  - name: results
-    persistentVolumeClaim:
-      claimName: $harness_results_pvc
-  - name: ${harness_name}-profiles    
-    configMap:
-      name: ${harness_name}-profiles
-  restartPolicy: Never    
+  serviceName: "${pod_name}"   # required by StatefulSet
+  replicas: 2                   # increase if you want parallel harness pods
+  podManagementPolicy: Parallel # allow parallel start when replicas > 1
+  selector:
+    matchLabels:
+      app: ${HARNESS_POD_LABEL}
+  template:
+    metadata:
+      labels:
+        app: ${HARNESS_POD_LABEL}
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: harness
+        image: ${harness_image}
+        imagePullPolicy: Always
+        securityContext:
+          runAsUser: 0
+        command: ["sh", "-c"]
+        args:
+          - "sleep infinity"
+        resources:
+          limits:
+            cpu: "${HARNESS_CPU_NR}"
+            memory: ${HARNESS_CPU_MEM}
+          requests:
+            cpu: "${HARNESS_CPU_NR}"
+            memory: ${HARNESS_CPU_MEM}
+        env:
+        - name: LLMDBENCH_RUN_WORKSPACE_DIR
+          value: "/workspace"
+        - name: LLMDBENCH_MAGIC_ENVAR
+          value: "harness_pod"
+        - name: LLMDBENCH_HARNESS_NAME
+          value: "${harness_name}"
+        - name: LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX
+          value: "${RESULTS_DIR_PREFIX}"
+        - name: LLMDBENCH_RUN_DATASET_DIR
+          value: "${DATASET_DIR}"
+        ${is_dataset_url}- name: LLMDBENCH_RUN_DATASET_URL
+        ${is_dataset_url}  value: "${harness_dataset_url}"
+        - name: LLMDBENCH_HARNESS_STACK_NAME
+          value: "${endpoint_stack_name}"
+        volumeMounts:
+        - name: results
+          mountPath: ${RESULTS_DIR_PREFIX}
+        - name: ${harness_name}-profiles
+          mountPath: /workspace/profiles/${harness_name}
+      volumes:
+      - name: results
+        persistentVolumeClaim:
+          claimName: ${harness_results_pvc}   # shared RWX PVC
+      - name: ${harness_name}-profiles
+        configMap:
+          name: ${harness_name}-profiles    
 EOF
 
-  echo ${control_kubectl} wait --for=condition=Ready=True pod ${pod_name} -n ${harness_namespace} --timeout="${CONTROL_WAIT_TIMEOUT}s"
+  echo ${control_kubectl} wait --for=condition=Ready=True statefulset/${pod_name} -n ${harness_namespace} --timeout="${CONTROL_WAIT_TIMEOUT}s"
 
-  ${control_kubectl} wait --for=condition=Ready=True pod ${pod_name} -n ${harness_namespace} --timeout="${CONTROL_WAIT_TIMEOUT}s"
+  ${control_kubectl} wait --for=condition=Ready=True statefulset/${pod_name} -n ${harness_namespace} --timeout="${CONTROL_WAIT_TIMEOUT}s"
   if [[ $? != 0 ]]; then
-    announce "❌ Timeout waiting for pod ${pod_name} to get ready"
+    announce "❌ Timeout waiting for statefulset ${pod_name} to get ready"
     exit 1
   fi
-  announce "ℹ️ Harness pod ${pod_name} started"
-  ${control_kubectl} describe pod ${pod_name} -n ${harness_namespace}
+  announce "ℹ️ Harness statefulset ${pod_name} started"
+  ${control_kubectl} describe statefulset ${pod_name} -n ${harness_namespace}
 }
 export -f start_harness_pod
 
@@ -330,10 +339,12 @@ yq '.workload | keys | .[]' "${_config_file}" |
 
     $control_kubectl exec -i ${_pod_name} -- bash <<RUN_WORKLOAD
 # redirect to root fds so that kubectl logs can capture output
-exec 1> >(tee /proc/1/fd/1 >&1)
-exec 2> >(tee /proc/1/fd/2 >&2)
+exec 1> >(tee /proc/1/fd/1)
+exec 2> >(tee /proc/1/fd/2)
 
-export LLMDBENCH_RUN_EXPERIMENT_ID="${_uid}_${workload}"
+ordinal="${HOSTNAME##*-}"
+echo "ORDINAL ${ordinal}" 
+export LLMDBENCH_RUN_EXPERIMENT_ID="${_uid}_${workload}_${ordinal}"
 
 ${HARNESS_EXECUTABLE} --harness="${harness_name}" --workload="${workload}"
 RUN_WORKLOAD
