@@ -122,7 +122,7 @@ function start_harness_pod {
 
   ${control_kubectl} --namespace ${harness_namespace} delete statefulset ${pod_name} --ignore-not-found
 
-  cat <<EOF | yq '.spec.containers[0].env = load("'${_config_file}'").env + .spec.containers[0].env' | ${control_kubectl} apply -f -
+  cat <<EOF | yq '.spec.template.spec.containers[0].env = load("'${_config_file}'").env + .spec.template.spec.containers[0].env' | ${control_kubectl} apply -f -
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -140,7 +140,6 @@ spec:
       labels:
         app: ${HARNESS_POD_LABEL}
     spec:
-      restartPolicy: Never
       containers:
       - name: harness
         image: ${harness_image}
