@@ -83,6 +83,8 @@
 {% macro build_vllm_command(mode='decode') -%}
 {% if mode == 'decode' -%}
 {% set config = decode -%}
+{% elif mode == 'encode' -%}
+{% set config = encode -%}
 {% else -%}
 {% set config = prefill -%}
 {% endif -%}
@@ -127,7 +129,8 @@
    on decode pods cannot reach the prefill pod (connection refused on 8000
    while vLLM listens on 8200). #}
 {% set proxy_disabled = (routing is defined and routing.proxy is defined and routing.proxy.enabled is defined and not routing.proxy.enabled) -%}
-{% set use_inference_port = proxy_disabled or mode == 'prefill' -%}
+{# Encode pods (epd-pools fork) also never have a proxy, like prefill. #}
+{% set use_inference_port = proxy_disabled or mode == 'prefill' or mode == 'encode' -%}
 {% set port_var = '$VLLM_INFERENCE_PORT' if use_inference_port else '$VLLM_METRICS_PORT' -%}
 {{ preprocess_script }}; vllm serve {{ model.cacheBase }}/{{ model.path }} \
   --host {{ vllmCommon.host }} \
@@ -188,6 +191,9 @@
 {% if mode == 'decode' -%}
 {% set config = decode -%}
 {% set role_env_name = 'VLLM_IS_DECODE' -%}
+{% elif mode == 'encode' -%}
+{% set config = encode -%}
+{% set role_env_name = 'VLLM_IS_ENCODE' -%}
 {% else -%}
 {% set config = prefill -%}
 {% set role_env_name = 'VLLM_IS_PREFILL' -%}

@@ -38,8 +38,22 @@ releases:
 
   - name: {{ model_id_label }}-ms
     namespace: {{ gateway.namespace }}
+{# When `modelservice.chartPath` is set in the scenario, point helmfile at a
+   local chart directory (used by epd-pools-disaggregation, which forks the
+   upstream chart to add an `encode` role). Relative paths are resolved
+   against the repo root (injected as `repoBaseDir` by render_plans), so
+   scenarios stay portable across machines. Absolute paths pass through.
+   Otherwise use the published chart from the registered repo as before. #}
+{% if modelservice is defined and modelservice.chartPath is defined and modelservice.chartPath %}
+{% if modelservice.chartPath.startswith('/') %}
+    chart: {{ modelservice.chartPath }}
+{% else %}
+    chart: {{ repoBaseDir }}/{{ modelservice.chartPath }}
+{% endif %}
+{% else %}
     chart: llm-d-modelservice/llm-d-modelservice
     version: {{ chartVersions.llmDModelservice }}
+{% endif %}
     installed: true
     needs:
 {% if _is_first_stack %}

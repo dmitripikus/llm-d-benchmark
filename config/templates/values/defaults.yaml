@@ -988,6 +988,91 @@ prefill:
       metricRelabelings: []
 
 # ============================================================================
+# ENCODE CONFIGURATION
+# Used by the epd-pools-disaggregation fork of llm-d-modelservice
+# (build/charts/llm-d-modelservice-epd) which adds a third vLLM role
+# for encode pools. Disabled by default; opt in per-stack via
+# `encode.enabled: true` + `encode.replicas > 0`.
+# ============================================================================
+encode:
+  enabled: false
+  replicas: 0
+
+  # Autoscaling (optional)
+  autoscaling:
+    enabled: false
+
+  # Node selector (optional)
+  nodeSelector: {}
+
+  # Accelerator type selection
+  acceleratorType:
+    labelKey: *gpu_label_key
+    labelValue: *gpu_label_value
+
+  # Parallelism configuration
+  parallelism: *parallelism_single
+
+  # Resource configuration
+  resources:
+    limits:
+      memory: *memory_40gi
+      cpu: *cpu_4
+    requests:
+      memory: *memory_40gi
+      cpu: *cpu_4
+
+  # Probe configuration
+  probes:
+    startup: *probe_startup
+    liveness: *probe_liveness
+    readiness: *probe_readiness
+
+  # vLLM configuration
+  vllm:
+    port: *vllm_port
+    servicePort: *vllm_service_port
+    workerMultiprocMethod: *worker_method
+    loggingLevel: *logging_level
+    imagePullPolicy: *pull_if_not_present
+    additionalFlags: []
+    customCommand: null
+    customPreprocessCommand: null
+
+  # Mount model volume
+  mountModelVolume: true
+
+  # Additional volume mounts
+  additionalVolumeMounts: []
+
+  # Additional volumes
+  additionalVolumes: []
+
+  # Extra environment variables
+  extraEnvVars: []
+
+  # Extra container config
+  extraContainerConfig: {}
+
+  # Extra pod config
+  extraPodConfig: {}
+
+  # Init containers (optional). See `decode.initContainers`.
+  initContainers: []
+
+  # Monitoring / PodMonitor (optional)
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+      labels: {}
+      annotations: {}
+      relabelings: []
+      metricRelabelings: []
+
+# ============================================================================
 # STANDALONE DEPLOYMENT CONFIGURATION
 # For simple single-model vLLM deployments without llm-d routing infrastructure
 # ============================================================================

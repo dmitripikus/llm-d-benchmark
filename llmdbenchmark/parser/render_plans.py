@@ -1077,6 +1077,11 @@ class RenderPlans:
         merged_values["siblingStacks"] = sibling_stacks or []
         merged_values["stackIndex"] = stack_index
         merged_values["sharedInfraStackIndex"] = shared_infra_stack_index
+        # Repo root, derived from the templates directory (<repo>/config/templates/jinja).
+        # Templates use this to resolve repo-relative paths like a vendored Helm
+        # chart under build/charts -- see 10_helmfile-main.yaml.j2's chartPath
+        # handling for the epd-pools-disaggregation fork.
+        merged_values["repoBaseDir"] = str(self.template_dir.resolve().parents[2])
 
         validation_warnings = validate_config(merged_values, self.logger)
         if validation_warnings:

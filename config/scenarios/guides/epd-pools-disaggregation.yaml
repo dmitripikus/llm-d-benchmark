@@ -18,14 +18,19 @@
 #                              |              |              |
 #                      +-------+------+ +-----+------+ +-----+------+
 #                      | vLLM (encode)| | vLLM(pref) | | vLLM(dec)  |
+#                      | role=encode  | | role=prefill| | role=decode|
 #                      +--------------+ +------------+ +------------+
 #
 # Notes:
-# - The llm-d-modelservice Helm chart hardcodes only `prefill` and `decode`
-#   roles. Each stack here uses the chart's `decode` block to deploy its
-#   single vLLM (with prefill disabled). The "Encode/Prefill/Decode" naming
-#   is semantic - it lives in stack `name`, `model.name`, and EPP labels,
-#   not in the chart's pod-role label (which is always `role=decode`).
+# - Uses a vendored fork of llm-d-modelservice at
+#   `build/charts/llm-d-modelservice-epd` that adds an `encode` role
+#   (encode-deployment.yaml + encodelabels helper) so the encode pod
+#   gets a real `llm-d.ai/role: encode` label, not a fallback decode.
+#   The fork is referenced via `modelservice.chartPath` (resolved against
+#   the repo root by render_plans).
+# - Each stack enables exactly one of {encode, prefill, decode}; the other
+#   two are disabled via the shared block. The chart only renders the
+#   Deployment whose `*.create` is true.
 # - Stacks differ via role-suffixed `model.name`. The renderer derives
 #   `model_id_label` from `model.name` + namespace, so distinct names yield
 #   distinct InferencePools, EPPs, helm releases, and HTTPRoutes.
@@ -45,16 +50,27 @@ shared:
   # --------------------------------------------------------------------------
   modelservice:
     enabled: true
+    # Repo-relative path to the vendored chart fork (encode role added).
+    # render_plans prepends `repoBaseDir` to relative paths so the helmfile
+    # gets an absolute chart reference.
+    chartPath: build/charts/llm-d-modelservice-epd
 
   standalone:
     enabled: false
 
   # --------------------------------------------------------------------------
-  # PREFILL block disabled in every stack -- the chart's `decode` block is
-  # used to deploy each stack's single vLLM. Per-stack `decode:` overrides
-  # below set `replicas: 1`.
+  # ROLE GATING -- disable all three by default; each stack opts in to
+  # exactly one. Without these, defaults.yaml would leave `decode.enabled:
+  # true` everywhere and every stack would deploy a decode pod alongside
+  # its actual role.
   # --------------------------------------------------------------------------
+  decode:
+    enabled: false
+    replicas: 0
   prefill:
+    enabled: false
+    replicas: 0
+  encode:
     enabled: false
     replicas: 0
 
@@ -79,6 +95,9 @@ shared:
   # `multi-nic-inference` NetworkAttachmentDefinition or `rdma/roce_gdr`.
   # --------------------------------------------------------------------------
   annotations:
+    encode:
+      pod:
+        k8s.v1.cni.cncf.io/networks: multi-nic-inference
     prefill:
       pod:
         k8s.v1.cni.cncf.io/networks: multi-nic-inference
@@ -87,6 +106,9 @@ shared:
         k8s.v1.cni.cncf.io/networks: multi-nic-inference
 
     resources:
+      encode:
+        networkResource: "rdma/roce_gdr"
+        networkNr: 1
       prefill:
         networkResource: "rdma/roce_gdr"
         networkNr: 1
@@ -152,7 +174,8 @@ scenario:
       gpuMemoryUtilization: 0.95
       cacheBase: /model-cache
 
-    decode:
+    encode:
+      enabled: true
       replicas: 1
       vllm:
         customCommand: |
@@ -162,12 +185,12 @@ scenario:
           vllm serve /model-cache/$MODEL_PATH \
           --host 0.0.0.0 \
           --served-model-name $MODEL_NAME \
-          --port $VLLM_METRICS_PORT \
+          --port $VLLM_INFERENCE_PORT \
           --block-size $VLLM_BLOCK_SIZE \
           --max-model-len $VLLM_MAX_MODEL_LEN \
           --max-num-seq $VLLM_MAX_NUM_SEQ \
           --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
-          --tensor-parallel-size $TP_SIZE \
+          --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
           --disable-uvicorn-access-log \
@@ -258,7 +281,8 @@ scenario:
       gpuMemoryUtilization: 0.95
       cacheBase: /model-cache
 
-    decode:
+    prefill:
+      enabled: true
       replicas: 1
       vllm:
         customCommand: |
@@ -268,12 +292,12 @@ scenario:
           vllm serve /model-cache/$MODEL_PATH \
           --host 0.0.0.0 \
           --served-model-name $MODEL_NAME \
-          --port $VLLM_METRICS_PORT \
+          --port $VLLM_INFERENCE_PORT \
           --block-size $VLLM_BLOCK_SIZE \
           --max-model-len $VLLM_MAX_MODEL_LEN \
           --max-num-seq $VLLM_MAX_NUM_SEQ \
           --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
-          --tensor-parallel-size $TP_SIZE \
+          --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
           --disable-uvicorn-access-log \
@@ -365,6 +389,7 @@ scenario:
       cacheBase: /model-cache
 
     decode:
+      enabled: true
       replicas: 1
       vllm:
         customCommand: |
@@ -379,7 +404,7 @@ scenario:
           --max-model-len $VLLM_MAX_MODEL_LEN \
           --max-num-seq $VLLM_MAX_NUM_SEQ \
           --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
-          --tensor-parallel-size $TP_SIZE \
+          --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
           --disable-uvicorn-access-log \

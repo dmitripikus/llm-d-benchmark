@@ -124,51 +124,59 @@ class DeployModelserviceStep(Step):
                 )
 
         if not errors:
-            decode_wait = cmd.wait_for_pods(
-                label="llm-d.ai/role=decode",
-                namespace=namespace,
-                timeout=timeout,
-                poll_interval=10,
-                description="decode pods",
-            )
-            if not decode_wait.success:
-                errors.append(f"Decode pods not ready: {decode_wait.stderr}")
+            # Wait per-role only for roles this stack actually deploys.
+            # epd-pools-disaggregation has stacks that deploy ONLY one of
+            # {encode, prefill, decode}; an unconditional decode wait
+            # hangs forever on encode/prefill-only stacks.
+            decode_enabled = bool(plan_config.get("decode", {}).get("enabled", False))
+            decode_replicas = int(plan_config.get("decode", {}).get("replicas", 0) or 0)
+            prefill_enabled = bool(plan_config.get("prefill", {}).get("enabled", False))
+            prefill_replicas = int(plan_config.get("prefill", {}).get("replicas", 0) or 0)
+            encode_enabled = bool(plan_config.get("encode", {}).get("enabled", False))
+            encode_replicas = int(plan_config.get("encode", {}).get("replicas", 0) or 0)
 
-            decode_cfg = plan_config.get("decode", {})
-            expected_replicas = int(self._require_config(plan_config, "decode", "replicas"))
-            is_multinode = plan_config.get("multinode", {}).get("enabled", False)
-            if is_multinode:
-                workers = int(self._require_config(plan_config, "decode", "parallelism", "workers"))
-                expected_replicas = expected_replicas * workers
-            if expected_replicas > 1 and not context.dry_run:
-                pod_count_result = cmd.kube(
-                    "get",
-                    "pods",
-                    "-l",
-                    "llm-d.ai/role=decode",
-                    "--namespace",
-                    namespace,
-                    "-o",
-                    "jsonpath={.items[*].metadata.name}",
+            if decode_enabled and decode_replicas > 0:
+                decode_wait = cmd.wait_for_pods(
+                    label="llm-d.ai/role=decode",
+                    namespace=namespace,
+                    timeout=timeout,
+                    poll_interval=10,
+                    description="decode pods",
                 )
-                if pod_count_result.success:
-                    actual_count = (
-                        len(pod_count_result.stdout.strip().split())
-                        if pod_count_result.stdout.strip()
-                        else 0
-                    )
-                    if actual_count < expected_replicas:
-                        context.logger.log_warning(
-                            f"⚠️  Expected {expected_replicas} decode pods "
-                            f"but found {actual_count}"
-                        )
-                    else:
-                        context.logger.log_info(
-                            f"✅ Decode pod count: {actual_count}/{expected_replicas}"
-                        )
+                if not decode_wait.success:
+                    errors.append(f"Decode pods not ready: {decode_wait.stderr}")
 
-            prefill_enabled = self._require_config(plan_config, "prefill", "enabled")
-            prefill_replicas = int(self._require_config(plan_config, "prefill", "replicas"))
+                expected_replicas = decode_replicas
+                is_multinode = plan_config.get("multinode", {}).get("enabled", False)
+                if is_multinode:
+                    workers = int(self._require_config(plan_config, "decode", "parallelism", "workers"))
+                    expected_replicas = expected_replicas * workers
+                if expected_replicas > 1 and not context.dry_run:
+                    pod_count_result = cmd.kube(
+                        "get",
+                        "pods",
+                        "-l",
+                        "llm-d.ai/role=decode",
+                        "--namespace",
+                        namespace,
+                        "-o",
+                        "jsonpath={.items[*].metadata.name}",
+                    )
+                    if pod_count_result.success:
+                        actual_count = (
+                            len(pod_count_result.stdout.strip().split())
+                            if pod_count_result.stdout.strip()
+                            else 0
+                        )
+                        if actual_count < expected_replicas:
+                            context.logger.log_warning(
+                                f"⚠️  Expected {expected_replicas} decode pods "
+                                f"but found {actual_count}"
+                            )
+                        else:
+                            context.logger.log_info(
+                                f"✅ Decode pod count: {actual_count}/{expected_replicas}"
+                            )
 
             if prefill_enabled and prefill_replicas > 0:
                 prefill_wait = cmd.wait_for_pods(
@@ -180,6 +188,17 @@ class DeployModelserviceStep(Step):
                 )
                 if not prefill_wait.success:
                     errors.append(f"Prefill pods not ready: {prefill_wait.stderr}")
+
+            if encode_enabled and encode_replicas > 0:
+                encode_wait = cmd.wait_for_pods(
+                    label="llm-d.ai/role=encode",
+                    namespace=namespace,
+                    timeout=timeout,
+                    poll_interval=10,
+                    description="encode pods",
+                )
+                if not encode_wait.success:
+                    errors.append(f"Encode pods not ready: {encode_wait.stderr}")
 
             pool_wait = cmd.wait_for_pods(
                 label=f"inferencepool={model_id_label}-gaie-epp",

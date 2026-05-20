@@ -10,6 +10,11 @@
 {# Define create flags once at the top for reuse #}
 {% set decode_create = (decode.enabled if decode.enabled is defined else (decode.replicas | default(0) | int > 0)) %}
 {% set prefill_create = (prefill.enabled if prefill.enabled is defined else (prefill.replicas | default(0) | int > 0)) %}
+{# Encode block (epd-pools-disaggregation fork) is optional. The vendored
+   chart ignores `encode:` when not present, so emit only when scenario
+   defines it. #}
+{% set encode_defined = encode is defined and encode %}
+{% set encode_create = encode_defined and (encode.enabled if encode.enabled is defined else (encode.replicas | default(0) | int > 0)) %}
 
 {# -------------------------------------------------------------------------- #}
 {# COMMON / TOP-LEVEL CONFIGURATION                                           #}
@@ -1014,6 +1019,366 @@ prefill:
       metricRelabelings:
 {{ prefill.monitoring.podmonitor.metricRelabelings | toyaml | indent(8) }}
 {% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+
+{# ========================================================================== #}
+{# ENCODE SECTION (epd-pools-disaggregation fork)                             #}
+{# ========================================================================== #}
+{# Encode pods, like prefill, never have a routing-proxy sidecar -- vLLM
+   binds directly to servicePort. Only emitted when the scenario defines an
+   `encode:` block; the vendored llm-d-modelservice-epd chart skips encode
+   resources when this section is absent. #}
+{% if encode_defined %}
+{% set encode_effective_port = encode.vllm.servicePort if encode.vllm is defined and encode.vllm.servicePort is defined else decode.vllm.servicePort -%}
+encode:
+  create: {{ encode_create | lower }}
+{% if encode_create %}
+  replicas: {{ encode.replicas }}
+
+{% if encode.autoscaling is defined %}
+  autoscaling:
+    enabled: {{ encode.autoscaling.enabled | lower }}
+{% if encode.autoscaling.minReplicas is defined %}
+    minReplicas: {{ encode.autoscaling.minReplicas }}
+{% endif %}
+{% if encode.autoscaling.maxReplicas is defined %}
+    maxReplicas: {{ encode.autoscaling.maxReplicas }}
+{% endif %}
+{% endif %}
+
+{% if encode.nodeSelector is defined and encode.nodeSelector %}
+  nodeSelector:
+{{ encode.nodeSelector | toyaml | indent(4) }}
+{% endif %}
+
+{% if encode.schedulerName is defined %}
+  schedulerName: {{ encode.schedulerName }}
+{% endif %}
+
+{% set encode_priority = encode.priorityClassName | default(vllmCommon.priorityClassName | default('')) %}
+{% if encode_priority and encode_priority != 'none' %}
+  priorityClassName: {{ encode_priority }}
+{% endif %}
+
+{% set encode_default_gpus = (encode.parallelism.tensor | int) * (encode.parallelism.dataLocal | int) %}
+{% set encode_accel_count = (encode.accelerator.count | default(encode_default_gpus) | int) if encode.accelerator is defined else encode_default_gpus %}
+{% if encode_accel_count > 0 %}
+{% set e_accel_type = encode.acceleratorType if encode.acceleratorType is defined else (standalone.acceleratorType if standalone.acceleratorType is defined else {}) %}
+{% if e_accel_type and e_accel_type.labelKey is defined %}
+  acceleratorTypes:
+    labelKey: {{ e_accel_type.labelKey }}
+    labelValues:
+{% if e_accel_type.labelValues is defined %}
+{% for value in e_accel_type.labelValues %}
+    - {{ value }}
+{% endfor %}
+{% elif e_accel_type.labelValue is defined %}
+    - {{ e_accel_type.labelValue }}
+{% endif %}
+{% endif %}
+{% endif %}
+
+  parallelism:
+    tensor: {{ encode.parallelism.tensor }}
+    data: {{ encode.parallelism.data }}
+    dataLocal: {{ encode.parallelism.dataLocal }}
+    workers: {{ encode.parallelism.workers }}
+
+{% if affinity is defined and affinity.enabled %}
+  affinity:
+{% if affinity.nodeSelector is defined and affinity.nodeSelector %}
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+{% for key, value in affinity.nodeSelector.items() %}
+          - key: {{ key }}
+            operator: In
+            values:
+            - "{{ value }}"
+{% endfor %}
+{% endif %}
+{% if affinity.podAffinity is defined and affinity.podAffinity %}
+    podAffinity:
+{{ affinity.podAffinity | toyaml | indent(6) }}
+{% endif %}
+{% if affinity.podAntiAffinity is defined and affinity.podAntiAffinity %}
+    podAntiAffinity:
+{{ affinity.podAntiAffinity | toyaml | indent(6) }}
+{% endif %}
+{% endif %}
+
+{% if annotations is defined and annotations.common is defined and annotations.common %}
+  annotations:
+{% for key, value in annotations.common.items() %}
+    {{ key }}: "{{ value }}"
+{% endfor %}
+{% endif %}
+
+{% if annotations is defined and annotations.encode is defined and annotations.encode.pod is defined and annotations.encode.pod %}
+  podAnnotations:
+{% for key, value in annotations.encode.pod.items() %}
+    {{ key }}: "{{ value }}"
+{% endfor %}
+{% endif %}
+
+{% if encode.tolerations is defined and encode.tolerations %}
+  tolerations:
+{{ encode.tolerations | toyaml | indent(4) }}
+{% endif %}
+
+{% if encode.accelerator is defined %}
+  accelerator:
+{% if encode.accelerator.type is defined %}
+    type: {{ encode.accelerator.type }}
+{% endif %}
+{% if dra is defined and dra.enabled is defined %}
+    dra: {{ dra.enabled | lower }}
+{% endif %}
+{% endif %}
+
+{% if encode.resourceClaims is defined and encode.resourceClaims %}
+  resourceClaims:
+{{ encode.resourceClaims | toyaml | indent(4) }}
+{% endif %}
+
+{% if encode.podSecurityContext is defined and encode.podSecurityContext %}
+  podSecurityContext:
+{{ encode.podSecurityContext | toyaml | indent(4) }}
+{% endif %}
+
+{% if encode.hostIPC is defined %}
+  hostIPC: {{ encode.hostIPC | lower }}
+{% endif %}
+{% if encode.hostPID is defined %}
+  hostPID: {{ encode.hostPID | lower }}
+{% endif %}
+{% if encode.enableServiceLinks is defined %}
+  enableServiceLinks: {{ encode.enableServiceLinks | lower }}
+{% endif %}
+{% if encode.terminationGracePeriodSeconds is defined %}
+  terminationGracePeriodSeconds: {{ encode.terminationGracePeriodSeconds }}
+{% endif %}
+
+{% if encode.initContainers is defined and encode.initContainers %}
+  initContainers:
+{% for ic in encode.initContainers %}
+{% if not ic.image %}
+{% set _ = ic.update({'image': images.benchmark.repository ~ ':' ~ images.benchmark.tag}) %}
+{% endif %}
+{% endfor %}
+{% for ic in encode.initContainers %}
+{{ render_init_container(ic, 'encode') | indent(4, true) }}
+{% endfor %}
+{% endif %}
+
+  containers:
+  - name: "vllm"
+    image: "{{ images.vllm.repository }}:{{ images.vllm.tag }}"
+    imagePullPolicy: {{ (encode.vllm.imagePullPolicy if encode.vllm is defined and encode.vllm.imagePullPolicy is defined else images.vllm.pullPolicy) | default('IfNotPresent') }}
+    mountModelVolume: {{ encode.mountModelVolume | lower }}
+{% set encode_model_command = encode.vllm.modelCommand | default('custom') %}
+    modelCommand: {{ encode_model_command }}
+{% if encode_model_command == 'custom' %}
+    command:
+      - /bin/sh
+      - '-c'
+    args:
+      - |
+{{ build_vllm_command('encode') | indent(8, first=True) }}
+{% endif %}
+    env:
+{{ build_ms_env_vars('encode') | indent(6, true) }}
+{% if encode.ports is defined and encode.ports %}
+    ports:
+{{ encode.ports | toyaml | indent(6, true) }}
+{% elif encode.extraContainerConfig is defined and encode.extraContainerConfig.ports is defined %}
+    ports:
+{% for port in encode.extraContainerConfig.ports %}
+      - containerPort: {{ port.containerPort }}
+{% if port.name is defined %}
+        name: {{ port.name }}
+{% endif %}
+        protocol: {{ port.protocol | default('TCP') }}
+{% endfor %}
+{% endif %}
+    resources:
+      limits:
+        memory: {{ encode.resources.limits.memory }}
+        cpu: "{{ encode.resources.limits.cpu }}"
+{% set encode_accel_resource = (encode.accelerator.resource if encode.accelerator is defined and encode.accelerator.resource is defined else accelerator.resource) %}
+{% if encode.resources.limits is defined and encode.resources.limits[encode_accel_resource] is defined %}
+        {{ encode_accel_resource }}: "{{ encode.resources.limits[encode_accel_resource] }}"
+{% elif encode_accel_count > 0 and accelerator.type != 'cpu' %}
+        {{ encode_accel_resource }}: "{{ encode_accel_count }}"
+{% endif %}
+{% set encode_eph_storage = encode.ephemeralStorage | default(vllmCommon.ephemeralStorage) %}
+{% set encode_eph_resource = vllmCommon.ephemeralStorageResource %}
+{% if encode_eph_storage and encode_eph_resource %}
+        {{ encode_eph_resource }}: "{{ encode_eph_storage }}"
+{% endif %}
+{% set encode_net_resource = encode.networkResource | default(vllmCommon.networkResource) %}
+{% set encode_net_nr = encode.networkNr | default(vllmCommon.networkNr) %}
+{% if encode_net_resource and encode_net_nr %}
+        {{ encode_net_resource }}: "{{ encode_net_nr }}"
+{% endif %}
+{% if encode.resources.limits is defined and encode.resources.limits.claims is defined %}
+      claims:
+{{ encode.resources.limits.claims | toyaml | indent(8) }}
+{% endif %}
+      requests:
+        memory: {{ encode.resources.requests.memory }}
+        cpu: "{{ encode.resources.requests.cpu }}"
+{% if encode.resources.requests is defined and encode.resources.requests[encode_accel_resource] is defined %}
+        {{ encode_accel_resource }}: "{{ encode.resources.requests[encode_accel_resource] }}"
+{% elif encode_accel_count > 0 and accelerator.type != 'cpu' %}
+        {{ encode_accel_resource }}: "{{ encode_accel_count }}"
+{% endif %}
+{% if encode_eph_storage and encode_eph_resource %}
+        {{ encode_eph_resource }}: "{{ encode_eph_storage }}"
+{% endif %}
+{% if encode_net_resource and encode_net_nr %}
+        {{ encode_net_resource }}: "{{ encode_net_nr }}"
+{% endif %}
+    extraConfig:
+{% if vllmCommon.pullSecret is defined and vllmCommon.pullSecret %}
+      imagePullSecrets:
+      - name: {{ vllmCommon.pullSecret }}
+{% endif %}
+      startupProbe:
+        httpGet:
+          path: {{ encode.probes.startup.path }}
+          port: {{ encode.probes.startup.port | default(encode_effective_port) }}
+        failureThreshold: {{ encode.probes.startup.failureThreshold }}
+        initialDelaySeconds: {{ encode.probes.startup.initialDelaySeconds }}
+        periodSeconds: {{ encode.probes.startup.periodSeconds }}
+        timeoutSeconds: {{ encode.probes.startup.timeoutSeconds }}
+      livenessProbe:
+{% if encode.probes.liveness.path is defined and encode.probes.liveness.path %}
+        httpGet:
+          path: {{ encode.probes.liveness.path }}
+          port: {{ encode.probes.liveness.port | default(encode_effective_port) }}
+{% else %}
+        tcpSocket:
+          port: {{ encode.probes.liveness.port | default(encode_effective_port) }}
+{% endif %}
+        failureThreshold: {{ encode.probes.liveness.failureThreshold }}
+        periodSeconds: {{ encode.probes.liveness.periodSeconds }}
+{% if encode.probes.liveness.timeoutSeconds is defined %}
+        timeoutSeconds: {{ encode.probes.liveness.timeoutSeconds }}
+{% endif %}
+      readinessProbe:
+        httpGet:
+          path: {{ encode.probes.readiness.path }}
+          port: {{ encode.probes.readiness.port | default(encode_effective_port) }}
+        failureThreshold: {{ encode.probes.readiness.failureThreshold }}
+        periodSeconds: {{ encode.probes.readiness.periodSeconds }}
+{% if encode.probes.readiness.timeoutSeconds is defined %}
+        timeoutSeconds: {{ encode.probes.readiness.timeoutSeconds }}
+{% endif %}
+{% if encode.extraContainerConfig is defined and encode.extraContainerConfig %}
+{% set extra_config_without_ports = {} %}
+{% for k, v in encode.extraContainerConfig.items() if k != 'ports' %}
+{% set _ = extra_config_without_ports.update({k: v}) %}
+{% endfor %}
+{% if extra_config_without_ports %}
+{{ extra_config_without_ports | toyaml | indent(6, true) }}
+{% endif %}
+{% endif %}
+    volumeMounts:
+{% for mount in vllmCommon.volumeMounts %}
+      - name: {{ mount.name }}
+        mountPath: {{ mount.mountPath }}
+{% if mount.subPath is defined %}
+        subPath: {{ mount.subPath }}
+{% endif %}
+{% if mount.readOnly is defined %}
+        readOnly: {{ mount.readOnly | lower }}
+{% endif %}
+{% endfor %}
+{% if encode.additionalVolumeMounts is defined %}
+{% for mount in encode.additionalVolumeMounts %}
+      - name: {{ mount.name }}
+        mountPath: {{ mount.mountPath }}
+{% if mount.subPath is defined %}
+        subPath: {{ mount.subPath }}
+{% endif %}
+{% if mount.readOnly is defined %}
+        readOnly: {{ mount.readOnly | lower }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+  volumes:
+{% for volume in vllmCommon.volumes %}
+    - name: {{ volume.name }}
+{% if volume.type == 'configMap' %}
+      configMap:
+        name: {{ volume.configMap.name }}
+{% if volume.configMap.defaultMode is defined %}
+        defaultMode: {{ volume.configMap.defaultMode }}
+{% endif %}
+{% elif volume.type == 'emptyDir' %}
+      emptyDir:
+{% if volume.emptyDir.medium is defined %}
+        medium: {{ volume.emptyDir.medium }}
+{% endif %}
+{% if volume.emptyDir.sizeLimit is defined %}
+        sizeLimit: {{ volume.emptyDir.sizeLimit }}
+{% endif %}
+{% elif volume.type == 'persistentVolumeClaim' %}
+      persistentVolumeClaim:
+        claimName: {{ volume.persistentVolumeClaim.claimName }}
+{% elif volume.type == 'secret' %}
+      secret:
+        secretName: {{ volume.secret.secretName }}
+{% if volume.secret.defaultMode is defined %}
+        defaultMode: {{ volume.secret.defaultMode }}
+{% endif %}
+{% elif volume.type == 'hostPath' %}
+      hostPath:
+        path: {{ volume.hostPath.path }}
+{% if volume.hostPath.type is defined %}
+        type: {{ volume.hostPath.type }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if encode.additionalVolumes is defined %}
+{% for volume in encode.additionalVolumes %}
+    - name: {{ volume.name }}
+{% if volume.type == 'configMap' %}
+      configMap:
+        name: {{ volume.configMap.name }}
+{% if volume.configMap.defaultMode is defined %}
+        defaultMode: {{ volume.configMap.defaultMode }}
+{% endif %}
+{% elif volume.type == 'emptyDir' %}
+      emptyDir:
+{% if volume.emptyDir.medium is defined %}
+        medium: {{ volume.emptyDir.medium }}
+{% endif %}
+{% if volume.emptyDir.sizeLimit is defined %}
+        sizeLimit: {{ volume.emptyDir.sizeLimit }}
+{% endif %}
+{% elif volume.type == 'persistentVolumeClaim' %}
+      persistentVolumeClaim:
+        claimName: {{ volume.persistentVolumeClaim.claimName }}
+{% elif volume.type == 'secret' %}
+      secret:
+        secretName: {{ volume.secret.secretName }}
+{% if volume.secret.defaultMode is defined %}
+        defaultMode: {{ volume.secret.defaultMode }}
+{% endif %}
+{% elif volume.type == 'hostPath' %}
+      hostPath:
+        path: {{ volume.hostPath.path }}
+{% if volume.hostPath.type is defined %}
+        type: {{ volume.hostPath.type }}
+{% endif %}
+{% endif %}
+{% endfor %}
 {% endif %}
 {% endif %}
 {% endif %}

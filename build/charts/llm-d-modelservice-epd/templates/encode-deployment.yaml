@@ -1,0 +1,67 @@
+{{- /* Encode deployment (epd-pools-disaggregation fork).
+       Mirrors prefill-deployment.yaml: no routing-proxy sidecar, role=encode. */ -}}
+{{- if and (hasKey .Values "encode") .Values.encode.create (not .Values.multinode) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-d-modelservice.encodeName" . }}
+  labels:
+    {{- include "llm-d-modelservice.labels" . | nindent 4 }}
+  {{- $warning := "" }}
+  {{- if .Values.encode.containers }}
+  {{- $firstContainer := index .Values.encode.containers 0 }}
+  {{- $warning = include "llm-d-modelservice.acceleratorWarning" (dict "parallelism" .Values.encode.parallelism "resources" $firstContainer.resources "Values" .Values "container" $firstContainer) }}
+  {{- end }}
+  {{- if or .Values.encode.annotations $warning }}
+  annotations:
+    {{- if .Values.encode.annotations }}
+    {{- toYaml .Values.encode.annotations | nindent 4 }}
+    {{- end }}
+    {{- if $warning }}
+    llm-d.ai/accelerator-warning: {{ $warning | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  replicas: {{ ternary .Values.encode.replicas 1 (hasKey .Values.encode "replicas") }}
+  {{- if .Values.encode.strategy }}
+  strategy:
+    {{- toYaml .Values.encode.strategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "llm-d-modelservice.encodelabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "llm-d-modelservice.encodelabels" . | nindent 8 }}
+      {{- if .Values.encode.podAnnotations }}
+      annotations:
+        {{- toYaml .Values.encode.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.encode.initContainers }}
+      initContainers:
+      {{- toYaml .Values.encode.initContainers | nindent 8 }}
+      {{- end }}
+      {{- if hasKey .Values.encode "enableServiceLinks" }}
+      enableServiceLinks: {{ .Values.encode.enableServiceLinks }}
+      {{- end }}
+      {{- if hasKey .Values.encode "terminationGracePeriodSeconds" }}
+      terminationGracePeriodSeconds: {{ .Values.encode.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- (include "llm-d-modelservice.modelPod" (dict "role" "encode" "pdSpec" .Values.encode "Values" .Values "Release" .Release "Chart" .Chart)) | nindent 4 }}
+      {{- if .Values.encode.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.encode.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- with .Values.encode.containers }}
+      containers:
+        {{- range . }}
+        {{- (include "llm-d-modelservice.container" (dict "role" "encode" "container" . "parallelism" $.Values.encode.parallelism "Values" $.Values "Release" $.Release "Chart" $.Chart "pdSpec" $.Values.encode)) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.encode.tolerations }}
+      tolerations:
+        {{- toYaml .Values.encode.tolerations | nindent 8 }}
+      {{- end }}
+{{- end }}
