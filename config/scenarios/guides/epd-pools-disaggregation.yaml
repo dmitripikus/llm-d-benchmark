@@ -1,0 +1,455 @@
+# EPD POOLS DISAGGREGATION WELL LIT PATH
+#
+# Three independent single-vLLM pools, each with its own EPP, InferencePool,
+# and HTTPRoute. Modeled after pd-disaggregation but with the prefill+decode
+# pair replaced by three peer pools labeled encode / prefill / decode.
+#
+# Topology:
+#                        +---- Gateway (infra-llmdbench, shared) ------+
+#                        |     HTTPRoute encode  -> InferencePool A    |
+#                        |     HTTPRoute prefill -> InferencePool B    |
+#                        |     HTTPRoute decode  -> InferencePool C    |
+#                        +---------------------------------------------+
+#                              |              |              |
+#                      +-------+------+ +-----+------+ +-----+------+
+#                      | EPP encode   | | EPP prefill| | EPP decode |
+#                      | + Pool       | | + Pool     | | + Pool     |
+#                      +-------+------+ +-----+------+ +-----+------+
+#                              |              |              |
+#                      +-------+------+ +-----+------+ +-----+------+
+#                      | vLLM (encode)| | vLLM(pref) | | vLLM(dec)  |
+#                      +--------------+ +------------+ +------------+
+#
+# Notes:
+# - The llm-d-modelservice Helm chart hardcodes only `prefill` and `decode`
+#   roles. Each stack here uses the chart's `decode` block to deploy its
+#   single vLLM (with prefill disabled). The "Encode/Prefill/Decode" naming
+#   is semantic - it lives in stack `name`, `model.name`, and EPP labels,
+#   not in the chart's pod-role label (which is always `role=decode`).
+# - Stacks differ via role-suffixed `model.name`. The renderer derives
+#   `model_id_label` from `model.name` + namespace, so distinct names yield
+#   distinct InferencePools, EPPs, helm releases, and HTTPRoutes.
+# - `model.path` and `model.huggingfaceId` are identical across stacks, so
+#   the model is downloaded ONCE to a shared PVC and reused.
+# - Each stack has its own `inferenceExtension.pluginsCustomConfig` so each
+#   EPP gets a distinct EndpointPickerConfig (per task requirement).
+# - HTTPRoutes are rendered in per-stack mode (default) - 3 separate
+#   HTTPRoute objects, one per stack.
+
+# ============================================================================
+# SHARED -- applied to every stack BEFORE per-stack overrides
+# ============================================================================
+shared:
+  # --------------------------------------------------------------------------
+  # DEPLOYMENT METHOD
+  # --------------------------------------------------------------------------
+  modelservice:
+    enabled: true
+
+  standalone:
+    enabled: false
+
+  # --------------------------------------------------------------------------
+  # PREFILL block disabled in every stack -- the chart's `decode` block is
+  # used to deploy each stack's single vLLM. Per-stack `decode:` overrides
+  # below set `replicas: 1`.
+  # --------------------------------------------------------------------------
+  prefill:
+    enabled: false
+    replicas: 0
+
+  # --------------------------------------------------------------------------
+  # ROUTING
+  # --------------------------------------------------------------------------
+  routing:
+    connector: nixlv2
+
+  # --------------------------------------------------------------------------
+  # STORAGE -- single shared model PVC. All three stacks load the same
+  # weights from this volume; the per-stack download Job is a no-op after
+  # the first stack populates the path.
+  # --------------------------------------------------------------------------
+  storage:
+    modelPvc:
+      size: 1Ti
+
+  # --------------------------------------------------------------------------
+  # ANNOTATIONS / NETWORK RESOURCES (RDMA) -- carried over from
+  # pd-disaggregation. Adjust or remove if the cluster lacks
+  # `multi-nic-inference` NetworkAttachmentDefinition or `rdma/roce_gdr`.
+  # --------------------------------------------------------------------------
+  annotations:
+    prefill:
+      pod:
+        k8s.v1.cni.cncf.io/networks: multi-nic-inference
+    decode:
+      pod:
+        k8s.v1.cni.cncf.io/networks: multi-nic-inference
+
+    resources:
+      prefill:
+        networkResource: "rdma/roce_gdr"
+        networkNr: 1
+      decode:
+        networkResource: "rdma/roce_gdr"
+        networkNr: 1
+
+  # --------------------------------------------------------------------------
+  # VLLM COMMON -- shared volumes/mounts across all three stacks
+  # --------------------------------------------------------------------------
+  vllmCommon:
+    volumes:
+      - name: shared-config
+        type: emptyDir
+        emptyDir: {}
+      - name: dshm
+        type: emptyDir
+        emptyDir:
+          medium: Memory
+          sizeLimit: 16Gi
+
+    volumeMounts:
+      - name: shared-config
+        mountPath: /shared-config
+      - name: dshm
+        mountPath: /dev/shm
+
+  # --------------------------------------------------------------------------
+  # TIMEOUTS
+  # --------------------------------------------------------------------------
+  timeouts:
+    controlWait: 900000
+    harnessWait: 900000
+
+  # --------------------------------------------------------------------------
+  # WORKLOAD / HARNESS -- single-instance per scenario
+  # --------------------------------------------------------------------------
+  workDir: "~/data/epd-pools-disaggregation"
+
+  harness:
+    name: vllm-benchmark
+    experimentProfile: random_concurrent.yaml
+
+
+# ============================================================================
+# SCENARIO -- three peer stacks, one per role
+# ============================================================================
+scenario:
+
+  # ==========================================================================
+  # Stack 1: ENCODE pool
+  # ==========================================================================
+  - name: epd-encode
+
+    model:
+      name: Qwen/Qwen3-32B-encode
+      shortName: qwen-qwen3-32b-encode
+      path: models/Qwen/Qwen3-32B
+      huggingfaceId: Qwen/Qwen3-32B
+      size: 1Ti
+      maxModelLen: 32768
+      blockSize: 128
+      gpuMemoryUtilization: 0.95
+      cacheBase: /model-cache
+
+    decode:
+      replicas: 1
+      vllm:
+        customCommand: |
+          export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
+          export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
+          source /shared-config/llmdbench_env.sh
+          vllm serve /model-cache/$MODEL_PATH \
+          --host 0.0.0.0 \
+          --served-model-name $MODEL_NAME \
+          --port $VLLM_METRICS_PORT \
+          --block-size $VLLM_BLOCK_SIZE \
+          --max-model-len $VLLM_MAX_MODEL_LEN \
+          --max-num-seq $VLLM_MAX_NUM_SEQ \
+          --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
+          --tensor-parallel-size $TP_SIZE \
+          --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --disable-uvicorn-access-log \
+          --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+          --no-enable-prefix-caching \
+          --dtype bfloat16 \
+          --no-disable-hybrid-kv-cache-manager
+
+      initContainers:
+        - name: preprocess
+          imageKey: benchmark
+          imagePullPolicy: Always
+          command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
+          volumeMounts:
+            - name: shared-config
+              mountPath: /shared-config
+
+      parallelism:
+        tensor: 1
+        data: 1
+        dataLocal: 1
+        workers: 1
+
+      resources:
+        limits:
+          memory: 128Gi
+          cpu: "32"
+        requests:
+          memory: 128Gi
+          cpu: "32"
+
+      extraEnvVars:
+        - name: NCCL_EXCLUDE_IB_HCA
+          value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8,mlxl5_7,mlx5_10,mlx5_12,mlx5_14,mlx5_16"
+        - name: NVSHMEM_DEBUG
+          value: "INFO"
+
+      extraContainerConfig:
+        securityContext:
+          capabilities:
+            add:
+              - "IPC_LOCK"
+              - "SYS_RAWIO"
+              - "NET_ADMIN"
+              - "NET_RAW"
+          runAsGroup: 0
+          runAsUser: 0
+        imagePullPolicy: Always
+
+      additionalVolumeMounts: []
+      additionalVolumes: []
+
+    inferenceExtension:
+      pluginsConfigFile: "epd-encode-config.yaml"
+      pluginsCustomConfig:
+        epd-encode-config.yaml: |
+          apiVersion: inference.networking.x-k8s.io/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: prefix-cache-scorer
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: max-score-picker
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+            - pluginRef: max-score-picker
+
+  # ==========================================================================
+  # Stack 2: PREFILL pool
+  # ==========================================================================
+  - name: epd-prefill
+
+    model:
+      name: Qwen/Qwen3-32B-prefill
+      shortName: qwen-qwen3-32b-prefill
+      path: models/Qwen/Qwen3-32B
+      huggingfaceId: Qwen/Qwen3-32B
+      size: 1Ti
+      maxModelLen: 32768
+      blockSize: 128
+      gpuMemoryUtilization: 0.95
+      cacheBase: /model-cache
+
+    decode:
+      replicas: 1
+      vllm:
+        customCommand: |
+          export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
+          export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
+          source /shared-config/llmdbench_env.sh
+          vllm serve /model-cache/$MODEL_PATH \
+          --host 0.0.0.0 \
+          --served-model-name $MODEL_NAME \
+          --port $VLLM_METRICS_PORT \
+          --block-size $VLLM_BLOCK_SIZE \
+          --max-model-len $VLLM_MAX_MODEL_LEN \
+          --max-num-seq $VLLM_MAX_NUM_SEQ \
+          --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
+          --tensor-parallel-size $TP_SIZE \
+          --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --disable-uvicorn-access-log \
+          --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+          --no-enable-prefix-caching \
+          --dtype bfloat16 \
+          --no-disable-hybrid-kv-cache-manager
+
+      initContainers:
+        - name: preprocess
+          imageKey: benchmark
+          imagePullPolicy: Always
+          command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
+          volumeMounts:
+            - name: shared-config
+              mountPath: /shared-config
+
+      parallelism:
+        tensor: 1
+        data: 1
+        dataLocal: 1
+        workers: 1
+
+      resources:
+        limits:
+          memory: 128Gi
+          cpu: "32"
+        requests:
+          memory: 128Gi
+          cpu: "32"
+
+      extraEnvVars:
+        - name: NCCL_EXCLUDE_IB_HCA
+          value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8,mlxl5_7,mlx5_10,mlx5_12,mlx5_14,mlx5_16"
+        - name: NVSHMEM_DEBUG
+          value: "INFO"
+
+      extraContainerConfig:
+        securityContext:
+          capabilities:
+            add:
+              - "IPC_LOCK"
+              - "SYS_RAWIO"
+              - "NET_ADMIN"
+              - "NET_RAW"
+          runAsGroup: 0
+          runAsUser: 0
+        imagePullPolicy: Always
+
+      additionalVolumeMounts: []
+      additionalVolumes: []
+
+    inferenceExtension:
+      pluginsConfigFile: "epd-prefill-config.yaml"
+      pluginsCustomConfig:
+        epd-prefill-config.yaml: |
+          apiVersion: inference.networking.x-k8s.io/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: prefix-cache-scorer
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: max-score-picker
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+            - pluginRef: max-score-picker
+
+  # ==========================================================================
+  # Stack 3: DECODE pool
+  # ==========================================================================
+  - name: epd-decode
+
+    model:
+      name: Qwen/Qwen3-32B-decode
+      shortName: qwen-qwen3-32b-decode
+      path: models/Qwen/Qwen3-32B
+      huggingfaceId: Qwen/Qwen3-32B
+      size: 1Ti
+      maxModelLen: 32768
+      blockSize: 128
+      gpuMemoryUtilization: 0.95
+      cacheBase: /model-cache
+
+    decode:
+      replicas: 1
+      vllm:
+        customCommand: |
+          export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
+          export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
+          source /shared-config/llmdbench_env.sh
+          vllm serve /model-cache/$MODEL_PATH \
+          --host 0.0.0.0 \
+          --served-model-name $MODEL_NAME \
+          --port $VLLM_METRICS_PORT \
+          --block-size $VLLM_BLOCK_SIZE \
+          --max-model-len $VLLM_MAX_MODEL_LEN \
+          --max-num-seq $VLLM_MAX_NUM_SEQ \
+          --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
+          --tensor-parallel-size $TP_SIZE \
+          --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
+          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --disable-uvicorn-access-log \
+          --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+          --no-enable-prefix-caching \
+          --dtype bfloat16 \
+          --no-disable-hybrid-kv-cache-manager
+
+      initContainers:
+        - name: preprocess
+          imageKey: benchmark
+          imagePullPolicy: Always
+          command: ["set_llmdbench_environment.py", "-e", "/shared-config/llmdbench_env.sh", "-i"]
+          volumeMounts:
+            - name: shared-config
+              mountPath: /shared-config
+
+      parallelism:
+        tensor: 1
+        data: 1
+        dataLocal: 1
+        workers: 1
+
+      resources:
+        limits:
+          memory: 128Gi
+          cpu: "32"
+        requests:
+          memory: 128Gi
+          cpu: "32"
+
+      extraEnvVars:
+        - name: NCCL_EXCLUDE_IB_HCA
+          value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8,mlxl5_7,mlx5_10,mlx5_12,mlx5_14,mlx5_16"
+        - name: NVSHMEM_DEBUG
+          value: "INFO"
+
+      extraContainerConfig:
+        securityContext:
+          capabilities:
+            add:
+              - "IPC_LOCK"
+              - "SYS_RAWIO"
+              - "NET_ADMIN"
+              - "NET_RAW"
+          runAsGroup: 0
+          runAsUser: 0
+        imagePullPolicy: Always
+
+      additionalVolumeMounts: []
+      additionalVolumes: []
+
+    inferenceExtension:
+      pluginsConfigFile: "epd-decode-config.yaml"
+      pluginsCustomConfig:
+        epd-decode-config.yaml: |
+          apiVersion: inference.networking.x-k8s.io/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: prefix-cache-scorer
+          - type: queue-scorer
+          - type: kv-cache-utilization-scorer
+          - type: max-score-picker
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: queue-scorer
+              weight: 2
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 2
+            - pluginRef: max-score-picker
