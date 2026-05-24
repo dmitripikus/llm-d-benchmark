@@ -293,7 +293,7 @@ class VersionResolver:
         """
         images = values.get("images", {})
         sections = []
-        for role in ("decode", "prefill"):
+        for role in ("decode", "prefill", "encode"):
             role_cfg = values.get(role, {})
             if isinstance(role_cfg, dict) and "initContainers" in role_cfg:
                 sections.append((f"{role}.initContainers", role_cfg["initContainers"]))
@@ -437,7 +437,7 @@ class VersionResolver:
         if isinstance(wva, dict) and wva.get("tag") == "auto":
             unresolved.append("wva.image.tag")
         # Init container images
-        for role in ("decode", "prefill", "standalone"):
+        for role in ("decode", "prefill", "standalone", "encode"):
             role_cfg = values.get(role, {})
             if isinstance(role_cfg, dict):
                 for i, c in enumerate(role_cfg.get("initContainers", []) or []):
