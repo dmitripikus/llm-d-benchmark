@@ -46,6 +46,18 @@
 # ============================================================================
 shared:
   # --------------------------------------------------------------------------
+  # IMAGES -- override the default vLLM image with a custom build that
+  # includes the `--mm-encoder-only` flag and Qwen3-VL multimodal support.
+  # --------------------------------------------------------------------------
+  images:
+    vllm:
+      repository: ghcr.io/revit13/vllm-openai
+      tag: nightly-b50646e5effd7cb5884cd96fdff4c53c18521198.omer
+    vllmOpenai:
+      repository: ghcr.io/revit13/vllm-openai
+      tag: nightly-b50646e5effd7cb5884cd96fdff4c53c18521198.omer
+
+  # --------------------------------------------------------------------------
   # DEPLOYMENT METHOD
   # --------------------------------------------------------------------------
   modelservice:
@@ -164,10 +176,10 @@ scenario:
   - name: epd-encode
 
     model:
-      name: Qwen/Qwen3-32B-encode
-      shortName: qwen-qwen3-32b-encode
-      path: models/Qwen/Qwen3-32B
-      huggingfaceId: Qwen/Qwen3-32B
+      name: Qwen/Qwen3-VL-2B-Instruct-encode
+      shortName: qwen-qwen3-vl-2b-instruct-encode
+      path: models/Qwen/Qwen3-VL-2B-Instruct
+      huggingfaceId: Qwen/Qwen3-VL-2B-Instruct
       size: 1Ti
       maxModelLen: 32768
       blockSize: 128
@@ -192,10 +204,11 @@ scenario:
           --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
           --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
-          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --ec-transfer-config '{"ec_connector":"ECCPUConnector", "ec_role":"ec_producer"}' \
           --disable-uvicorn-access-log \
           --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
           --no-enable-prefix-caching \
+          --mm-encoder-only \
           --dtype bfloat16 \
           --no-disable-hybrid-kv-cache-manager
 
@@ -271,10 +284,10 @@ scenario:
   - name: epd-prefill
 
     model:
-      name: Qwen/Qwen3-32B-prefill
-      shortName: qwen-qwen3-32b-prefill
-      path: models/Qwen/Qwen3-32B
-      huggingfaceId: Qwen/Qwen3-32B
+      name: Qwen/Qwen3-VL-2B-Instruct-prefill
+      shortName: qwen-qwen3-vl-2b-instruct-prefill
+      path: models/Qwen/Qwen3-VL-2B-Instruct
+      huggingfaceId: Qwen/Qwen3-VL-2B-Instruct
       size: 1Ti
       maxModelLen: 32768
       blockSize: 128
@@ -300,6 +313,7 @@ scenario:
           --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
           --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
+          --ec-transfer-config '{"ec_connector":"ECCPUConnector", "ec_role":"ec_consumer"}' \
           --disable-uvicorn-access-log \
           --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
           --no-enable-prefix-caching \
@@ -378,10 +392,10 @@ scenario:
   - name: epd-decode
 
     model:
-      name: Qwen/Qwen3-32B-decode
-      shortName: qwen-qwen3-32b-decode
-      path: models/Qwen/Qwen3-32B
-      huggingfaceId: Qwen/Qwen3-32B
+      name: Qwen/Qwen3-VL-2B-Instruct-decode
+      shortName: qwen-qwen3-vl-2b-instruct-decode
+      path: models/Qwen/Qwen3-VL-2B-Instruct
+      huggingfaceId: Qwen/Qwen3-VL-2B-Instruct
       size: 1Ti
       maxModelLen: 32768
       blockSize: 128

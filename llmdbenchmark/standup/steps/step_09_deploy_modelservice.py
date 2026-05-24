@@ -1,6 +1,7 @@
 """Step 09 -- Deploy the model via the llm-d modelservice Helm chart."""
 
 import hashlib
+import json
 import time
 from pathlib import Path
 
@@ -61,7 +62,13 @@ class DeployModelserviceStep(Step):
                     stack_name=stack_name,
                 )
 
-        if context.is_openshift and not context.non_admin:
+        if context.is_openshift:
+            # Always attempt SCC binding on OpenShift. _manage_sccs falls
+            # back to patching the namespace-scoped RoleBinding
+            # `system:openshift:scc:<scc>` when `oc adm policy
+            # add-scc-to-user` is denied (--non-admin / non-cluster-admin),
+            # so re-deploys with renamed model_id_label (and thus new SAs)
+            # still get bound on every standup.
             self._manage_sccs(cmd, context, plan_config, namespace)
 
         ms_values = self._find_yaml(stack_path, "13_ms-values")
@@ -444,7 +451,7 @@ class DeployModelserviceStep(Step):
         vllm_common_pc = plan_config.get("vllmCommon", {}).get("priorityClassName", "")
 
         classes_to_check = set()
-        for section in ["decode", "prefill"]:
+        for section in ["decode", "prefill", "encode"]:
             pc = plan_config.get(section, {}).get("priorityClassName") or vllm_common_pc
             if pc and pc.lower() != "none":
                 classes_to_check.add(pc)
@@ -502,8 +509,9 @@ class DeployModelserviceStep(Step):
             plan_config.get("vllmCommon", {}),
             plan_config.get("decode", {}),
             plan_config.get("prefill", {}),
+            plan_config.get("encode", {}),
         ]
-        for role in ["Decode", "Prefill"]:
+        for role in ["Decode", "Prefill", "Encode"]:
             sections_to_check.append(plan_config.get(f"vllmModelservice{role}", {}))
 
         for section in sections_to_check:
@@ -541,7 +549,7 @@ class DeployModelserviceStep(Step):
             f"in namespace {namespace}"
         )
         for scc in ["anyuid", "privileged"]:
-            cmd.kube(
+            result = cmd.kube(
                 "adm",
                 "policy",
                 "add-scc-to-user",
@@ -550,14 +558,94 @@ class DeployModelserviceStep(Step):
                 sa_name,
                 "-n",
                 namespace,
+                check=False,
+            )
+            # `oc adm policy add-scc-to-user` requires cluster-admin. Under
+            # --non-admin or any cluster role lacking that permission, fall
+            # back to patching the existing namespace-scoped RoleBinding
+            # `system:openshift:scc:<scc>` (created up-front by a cluster
+            # admin once per namespace). Adding a ServiceAccount subject
+            # there is purely namespace-scoped and works for namespace
+            # admins, so re-deploys under a renamed model_id_label still
+            # get their SAs bound to the SCC.
+            if not result.success:
+                self._bind_sa_to_scc_rolebinding(
+                    cmd, context, namespace, scc, sa_name,
+                )
+
+    def _bind_sa_to_scc_rolebinding(
+        self,
+        cmd: CommandExecutor,
+        context: ExecutionContext,
+        namespace: str,
+        scc: str,
+        sa_name: str,
+    ):
+        """Add a ServiceAccount subject to an existing SCC RoleBinding.
+
+        Used as a fallback when ``oc adm policy add-scc-to-user`` is
+        denied (non-cluster-admin). Idempotent: skips if the SA is
+        already a subject.
+        """
+        rb_name = f"system:openshift:scc:{scc}"
+
+        # Check the rolebinding exists; if not, log and bail (we can't
+        # create cluster-scoped equivalents from here).
+        existing = cmd.kube(
+            "get", "rolebinding", rb_name,
+            "-n", namespace,
+            "-o", "jsonpath={.subjects[*].name}",
+            check=False,
+        )
+        if not existing.success:
+            context.logger.log_warning(
+                f"    Could not bind SA '{sa_name}' to SCC '{scc}': "
+                f"RoleBinding '{rb_name}' not found in namespace "
+                f"'{namespace}'. A cluster admin must run "
+                f"`oc adm policy add-scc-to-user {scc} -z {sa_name} "
+                f"-n {namespace}` once."
+            )
+            return
+
+        if sa_name in existing.stdout.split():
+            context.logger.log_info(
+                f"    ✓ SA '{sa_name}' already bound to SCC '{scc}'"
+            )
+            return
+
+        patch = json.dumps([{
+            "op": "add",
+            "path": "/subjects/-",
+            "value": {
+                "kind": "ServiceAccount",
+                "name": sa_name,
+                "namespace": namespace,
+            },
+        }])
+        result = cmd.kube(
+            "patch", "rolebinding", rb_name,
+            "-n", namespace,
+            "--type=json",
+            "-p", patch,
+            check=False,
+        )
+        if result.success:
+            context.logger.log_info(
+                f"    ✓ Bound SA '{sa_name}' to SCC '{scc}' via "
+                f"RoleBinding '{rb_name}'"
+            )
+        else:
+            context.logger.log_warning(
+                f"    Failed to bind SA '{sa_name}' to SCC '{scc}': "
+                f"{result.stderr}"
             )
 
     def _collect_logs(
         self, cmd: CommandExecutor, context: ExecutionContext, namespace: str
     ):
-        """Collect decode and prefill pod logs after deployment."""
+        """Collect decode, prefill, and encode pod logs after deployment."""
         logs_dir = context.setup_logs_dir()
-        for role in ["decode", "prefill"]:
+        for role in ["decode", "prefill", "encode"]:
             result = cmd.kube(
                 "get",
                 "pods",

@@ -91,7 +91,7 @@ class WorkloadMonitoringStep(Step):
     @staticmethod
     def _any_method_uses_accelerator(plan_config: dict) -> bool:
         """Return True if any deployment method requests accelerators (count > 0)."""
-        for method in ("standalone", "decode", "prefill"):
+        for method in ("standalone", "decode", "prefill", "encode"):
             method_config = plan_config.get(method, {}) or {}
             count = method_config.get("accelerator", {}).get("count", 0)
             try:
@@ -290,7 +290,7 @@ class WorkloadMonitoringStep(Step):
         if is_fma:
             return
 
-        for method in ("standalone", "decode", "prefill"):
+        for method in ("standalone", "decode", "prefill", "encode"):
             method_config = plan_config.get(method, {})
             if not method_config:
                 continue
