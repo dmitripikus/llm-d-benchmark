@@ -93,6 +93,18 @@ shared:
     connector: nixlv2
 
   # --------------------------------------------------------------------------
+  # HTTP ROUTE -- single header-based router. The coordinator at
+  # /home/eres/coordinator already sets `EPP-Phase: encode|prefill|decode`
+  # on every outbound call (see pkg/gateway/paths.go); this mode renders
+  # one HTTPRoute that fans out by that header to the matching pool.
+  # Replaces the default per-stack path-prefix routes.
+  # --------------------------------------------------------------------------
+  httpRoute:
+    mode: epp-phase
+    # fallbackPhase: decode    # default; unheaded requests route to decode
+    # name: epp-phase-router   # default
+
+  # --------------------------------------------------------------------------
   # STORAGE -- single shared model PVC. All three stacks load the same
   # weights from this volume; the per-stack download Job is a no-op after
   # the first stack populates the path.

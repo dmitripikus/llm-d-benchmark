@@ -954,10 +954,17 @@ class RenderPlans:
                 if stack_standalone is not None
                 else shared_standalone
             )
+            phase_enabled = [
+                role
+                for role in ("encode", "prefill", "decode")
+                if (stack.get(role) or {}).get("enabled") is True
+            ]
+            phase = phase_enabled[0] if len(phase_enabled) == 1 else ""
             siblings.append({
                 "name": stack.get("name", ""),
                 "modelName": model_name,
                 "standalone": is_standalone,
+                "phase": phase,
             })
         return siblings
 
