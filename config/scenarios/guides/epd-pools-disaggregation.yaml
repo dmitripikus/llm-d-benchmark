@@ -93,6 +93,18 @@ shared:
     connector: nixlv2
 
   # --------------------------------------------------------------------------
+  # HTTP ROUTE -- single header-based router. The coordinator at
+  # /home/eres/coordinator already sets `EPP-Phase: encode|prefill|decode`
+  # on every outbound call (see pkg/gateway/paths.go); this mode renders
+  # one HTTPRoute that fans out by that header to the matching pool.
+  # Replaces the default per-stack path-prefix routes.
+  # --------------------------------------------------------------------------
+  httpRoute:
+    mode: epp-phase
+    # fallbackPhase: decode    # default; unheaded requests route to decode
+    # name: epp-phase-router   # default
+
+  # --------------------------------------------------------------------------
   # STORAGE -- single shared model PVC. All three stacks load the same
   # weights from this volume; the per-stack download Job is a no-op after
   # the first stack populates the path.
@@ -240,6 +252,15 @@ scenario:
           value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8,mlxl5_7,mlx5_10,mlx5_12,mlx5_14,mlx5_16"
         - name: NVSHMEM_DEBUG
           value: "INFO"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        # Override the macro-set MODEL_NAME (which would otherwise be the
+        # suffixed model.name like "Qwen/Qwen3-VL-2B-Instruct-encode") so
+        # vLLM advertises the bare HF id that the coordinator request body
+        # uses. Kubernetes resolves duplicate env names by taking the last
+        # entry, so this wins over the macro value.
+        - name: MODEL_NAME
+          value: "Qwen/Qwen3-VL-2B-Instruct"
 
       extraContainerConfig:
         securityContext:
@@ -348,6 +369,15 @@ scenario:
           value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8,mlxl5_7,mlx5_10,mlx5_12,mlx5_14,mlx5_16"
         - name: NVSHMEM_DEBUG
           value: "INFO"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        # Override the macro-set MODEL_NAME (which would otherwise be the
+        # suffixed model.name like "Qwen/Qwen3-VL-2B-Instruct-encode") so
+        # vLLM advertises the bare HF id that the coordinator request body
+        # uses. Kubernetes resolves duplicate env names by taking the last
+        # entry, so this wins over the macro value.
+        - name: MODEL_NAME
+          value: "Qwen/Qwen3-VL-2B-Instruct"
 
       extraContainerConfig:
         securityContext:
@@ -455,6 +485,15 @@ scenario:
           value: "mlx5_0,mlx5_2,mlx5_4,mlx5_8,mlxl5_7,mlx5_10,mlx5_12,mlx5_14,mlx5_16"
         - name: NVSHMEM_DEBUG
           value: "INFO"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        # Override the macro-set MODEL_NAME (which would otherwise be the
+        # suffixed model.name like "Qwen/Qwen3-VL-2B-Instruct-encode") so
+        # vLLM advertises the bare HF id that the coordinator request body
+        # uses. Kubernetes resolves duplicate env names by taking the last
+        # entry, so this wins over the macro value.
+        - name: MODEL_NAME
+          value: "Qwen/Qwen3-VL-2B-Instruct"
 
       extraContainerConfig:
         securityContext:
