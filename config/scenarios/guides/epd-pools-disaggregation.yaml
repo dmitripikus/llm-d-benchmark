@@ -100,6 +100,14 @@ shared:
   storage:
     modelPvc:
       size: 1Ti
+    extraPvc:
+      name: vllm-shared-storage
+      size: 50Gi
+      # IBM Spectrum Scale fileset is RWX-capable and node-agnostic.
+      # local-fs binds to a single node and conflicts with GPU scheduling.
+      storageClassName: ibm-spectrum-scale-fileset
+      accessModes:
+        - ReadWriteMany
 
   # --------------------------------------------------------------------------
   # ANNOTATIONS / NETWORK RESOURCES (RDMA) -- carried over from
@@ -141,12 +149,20 @@ shared:
         emptyDir:
           medium: Memory
           sizeLimit: 16Gi
+      # RWX PVC shared by all 3 roles for the file-based EC connector.
+      # Standup step 04 creates it from storage.extraPvc above.
+      - name: shared-cache
+        type: persistentVolumeClaim
+        persistentVolumeClaim:
+          claimName: vllm-shared-storage
 
     volumeMounts:
       - name: shared-config
         mountPath: /shared-config
       - name: dshm
         mountPath: /dev/shm
+      - name: shared-cache
+        mountPath: /shared-cache
 
   # --------------------------------------------------------------------------
   # TIMEOUTS
@@ -194,6 +210,7 @@ scenario:
           export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
           export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
           source /shared-config/llmdbench_env.sh
+          mkdir -p /shared-cache/ec /shared-cache/kv
           vllm serve /model-cache/$MODEL_PATH \
           --host 0.0.0.0 \
           --served-model-name $MODEL_NAME \
@@ -204,13 +221,13 @@ scenario:
           --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
           --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
-          --ec-transfer-config '{"ec_connector":"ECCPUConnector", "ec_role":"ec_producer"}' \
+          --ec-transfer-config '{"ec_connector":"ECExampleConnector","ec_role":"ec_producer","ec_connector_extra_config":{"shared_storage_path":"/shared-cache/ec"}}' \
           --disable-uvicorn-access-log \
           --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
           --no-enable-prefix-caching \
           --mm-encoder-only \
           --dtype bfloat16 \
-          --no-disable-hybrid-kv-cache-manager
+          --disable-hybrid-kv-cache-manager
 
       initContainers:
         - name: preprocess
@@ -302,6 +319,7 @@ scenario:
           export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
           export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
           source /shared-config/llmdbench_env.sh
+          mkdir -p /shared-cache/ec /shared-cache/kv
           vllm serve /model-cache/$MODEL_PATH \
           --host 0.0.0.0 \
           --served-model-name $MODEL_NAME \
@@ -312,13 +330,13 @@ scenario:
           --max-num-batched-tokens $VLLM_MAX_NUM_BATCHED_TOKENS \
           --tensor-parallel-size $VLLM_TENSOR_PARALLELISM \
           --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
-          --kv-transfer-config '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}' \
-          --ec-transfer-config '{"ec_connector":"ECCPUConnector", "ec_role":"ec_consumer"}' \
+          --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}' \
+          --ec-transfer-config '{"ec_connector":"ECExampleConnector","ec_role":"ec_consumer","ec_connector_extra_config":{"shared_storage_path":"/shared-cache/ec"}}' \
           --disable-uvicorn-access-log \
           --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
           --no-enable-prefix-caching \
           --dtype bfloat16 \
-          --no-disable-hybrid-kv-cache-manager
+          --disable-hybrid-kv-cache-manager
 
       initContainers:
         - name: preprocess
